@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, desc, eq, gte, ilike, lte, or } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, lt, or } from "drizzle-orm";
 import { getDb } from "@/db";
 import {
   collectionAllocations,
@@ -12,6 +12,14 @@ import {
   staff,
 } from "@/db/schema";
 import { DEFAULT_SETTINGS, paymentStatus, rewardFor } from "@/lib/business";
+
+function nextMonthStart(month: string) {
+  const [year, monthNumber] = month.split("-").map(Number);
+  if (!year || !monthNumber || monthNumber < 1 || monthNumber > 12)
+    throw new Error(`Invalid month: ${month}`);
+  const next = new Date(Date.UTC(year, monthNumber, 1));
+  return next.toISOString().slice(0, 10);
+}
 
 export async function getSettings() {
   return (
@@ -111,7 +119,7 @@ export async function listCollections(
   const conditions = [];
   if (filters.month) {
     conditions.push(gte(collections.collectionDate, `${filters.month}-01`));
-    conditions.push(lte(collections.collectionDate, `${filters.month}-31`));
+    conditions.push(lt(collections.collectionDate, nextMonthStart(filters.month)));
   }
   const targetStaff = allowedStaffId ?? filters.staffId;
   if (targetStaff)
@@ -217,35 +225,4 @@ export async function monthlySummaries(month: string, allowedStaffId?: string) {
         : 100,
     };
   });
-}
-
-export async function getCollectionForEdit(id: string) {
-  const rows = await listCollections({});
-  const mine = rows.filter((row) => row.collection.id === id);
-  if (!mine.length) return null;
-  return {
-    ...mine[0],
-    allocations: mine.map((row) => ({
-      staffId: row.staffId,
-      staffName: row.staffName,
-      allocationBps: row.allocationBps,
-      commissionRateBps: row.commissionRateBps,
-    })),
-  };
-}
-
-export async function paymentHistory(staffId?: string, month?: string) {
-  const conditions = [];
-  if (staffId) conditions.push(eq(commissionPayments.staffId, staffId));
-  if (month) conditions.push(eq(commissionPayments.commissionMonth, month));
-  return getDb()
-    .select({
-      payment: commissionPayments,
-      staffName: staff.name,
-      createdByName: staff.name,
-    })
-    .from(commissionPayments)
-    .innerJoin(staff, eq(commissionPayments.staffId, staff.id))
-    .where(conditions.length ? and(...conditions) : undefined)
-    .orderBy(desc(commissionPayments.paymentDate));
 }
