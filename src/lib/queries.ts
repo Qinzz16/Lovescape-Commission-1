@@ -112,6 +112,7 @@ export type CollectionFilters = {
   source?: string;
   search?: string;
 };
+
 export async function listCollections(
   filters: CollectionFilters = {},
   allowedStaffId?: string,
@@ -225,4 +226,35 @@ export async function monthlySummaries(month: string, allowedStaffId?: string) {
         : 100,
     };
   });
+}
+
+export async function getCollectionForEdit(id: string) {
+  const rows = await listCollections({});
+  const mine = rows.filter((row) => row.collection.id === id);
+  if (!mine.length) return null;
+  return {
+    ...mine[0],
+    allocations: mine.map((row) => ({
+      staffId: row.staffId,
+      staffName: row.staffName,
+      allocationBps: row.allocationBps,
+      commissionRateBps: row.commissionRateBps,
+    })),
+  };
+}
+
+export async function paymentHistory(staffId?: string, month?: string) {
+  const conditions = [];
+  if (staffId) conditions.push(eq(commissionPayments.staffId, staffId));
+  if (month) conditions.push(eq(commissionPayments.commissionMonth, month));
+  return getDb()
+    .select({
+      payment: commissionPayments,
+      staffName: staff.name,
+      createdByName: staff.name,
+    })
+    .from(commissionPayments)
+    .innerJoin(staff, eq(commissionPayments.staffId, staff.id))
+    .where(conditions.length ? and(...conditions) : undefined)
+    .orderBy(desc(commissionPayments.paymentDate));
 }
