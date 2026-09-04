@@ -17,17 +17,29 @@ if (password.length < 12) {
 }
 
 const db = getDb();
+const passwordHash = await hash(password, 12);
 const [existing] = await db.select().from(staff).where(eq(staff.email, email)).limit(1);
 
 if (existing) {
-  console.log(`Admin account already exists for ${email}; leaving it unchanged.`);
+  await db
+    .update(staff)
+    .set({
+      name,
+      passwordHash,
+      role: "ADMIN",
+      active: true,
+      loginEnabled: true,
+      updatedAt: new Date(),
+    })
+    .where(eq(staff.id, existing.id));
+  console.log(`Admin account refreshed for ${email}. Remove ADMIN_PASSWORD from Vercel after the first successful deployment.`);
   process.exit(0);
 }
 
 await db.insert(staff).values({
   name,
   email,
-  passwordHash: await hash(password, 12),
+  passwordHash,
   role: "ADMIN",
   active: true,
   loginEnabled: true,
