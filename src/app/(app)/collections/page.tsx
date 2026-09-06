@@ -14,10 +14,14 @@ export default async function CollectionsPage({ searchParams }: { searchParams: 
     listStaff(false),
     listCollections({ month, staffId: q.staffId, category: q.category, source: q.source }),
   ]);
-  const grouped = Object.values(rows.reduce<Record<string, { base: (typeof rows)[number]; allocations: typeof rows }>((map, row) => {
-    (map[row.collection.id] ??= { base: row, allocations: [] }).allocations.push(row);
-    return map;
-  }, {}));
+
+  const grouped = new Map<string, { base: (typeof rows)[number]; allocations: (typeof rows)[number][] }>();
+  for (const row of rows) {
+    const existing = grouped.get(row.collection.id);
+    if (existing) existing.allocations.push(row);
+    else grouped.set(row.collection.id, { base: row, allocations: [row] });
+  }
+
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kuala_Lumpur" }).format(new Date());
   return <>
     <PageHead title="Collections" description="Record money actually received. Commission is calculated from the collected amount and staff allocation." />
@@ -44,7 +48,7 @@ export default async function CollectionsPage({ searchParams }: { searchParams: 
         <button className="button">Apply filters</button>
       </form>
       <div className="table-wrap"><table><thead><tr><th>Date</th><th>Category</th><th>Collected</th><th>Allocation & commission</th><th>Source</th><th>Action</th></tr></thead>
-      <tbody>{grouped.map(({ base, allocations }) => <tr key={base.collection.id}>
+      <tbody>{Array.from(grouped.values()).map(({ base, allocations }) => <tr key={base.collection.id}>
         <td>{base.collection.collectionDate}</td><td>{base.collection.category.replace("_", " ")}</td><td><Money value={base.collection.collectedSen} /></td>
         <td>{allocations.map((a) => <div key={a.staffId}>{a.staffName}: <Money value={a.allocatedCollectedSen} /> × {(a.commissionRateBps / 100).toFixed(2)}% = <strong><Money value={a.commissionAmountSen} /></strong></div>)}</td>
         <td>{base.collection.source.replace("_", " ")}</td>
