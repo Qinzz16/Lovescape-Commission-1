@@ -1,173 +1,51 @@
 import "server-only";
 import { and, asc, desc, eq, gte, ilike, lt, or } from "drizzle-orm";
 import { getDb } from "@/db";
-import {
-  collectionAllocations,
-  collections,
-  commissionPayments,
-  commissionSettings,
-  monthlyLocks,
-  orderAdjustments,
-  orders,
-  staff,
-} from "@/db/schema";
+import { collectionAllocations, collections, commissionPayments, commissionSettings, monthlyLocks, staff } from "@/db/schema";
 import { DEFAULT_SETTINGS, paymentStatus, rewardFor } from "@/lib/business";
 
 function nextMonthStart(month: string) {
   const [year, monthNumber] = month.split("-").map(Number);
-  if (!year || !monthNumber || monthNumber < 1 || monthNumber > 12)
-    throw new Error(`Invalid month: ${month}`);
-  const next = new Date(Date.UTC(year, monthNumber, 1));
-  return next.toISOString().slice(0, 10);
+  if (!year || !monthNumber || monthNumber < 1 || monthNumber > 12) throw new Error(`Invalid month: ${month}`);
+  return new Date(Date.UTC(year, monthNumber, 1)).toISOString().slice(0, 10);
 }
 
 export async function getSettings() {
-  return (
-    (
-      await getDb()
-        .select()
-        .from(commissionSettings)
-        .where(eq(commissionSettings.id, 1))
-        .limit(1)
-    )[0] ?? { id: 1, ...DEFAULT_SETTINGS }
-  );
+  return (await getDb().select().from(commissionSettings).where(eq(commissionSettings.id, 1)).limit(1))[0] ?? { id: 1, ...DEFAULT_SETTINGS };
 }
-
 export async function isMonthLocked(month: string) {
-  const [row] = await getDb()
-    .select()
-    .from(monthlyLocks)
-    .where(eq(monthlyLocks.month, month))
-    .limit(1);
+  const [row] = await getDb().select().from(monthlyLocks).where(eq(monthlyLocks.month, month)).limit(1);
   return Boolean(row?.locked);
 }
-
 export async function listStaff(includeInactive = true) {
   const rows = await getDb().select().from(staff).orderBy(asc(staff.name));
   return includeInactive ? rows : rows.filter((item) => item.active);
 }
 
-export async function listOrders(search = "") {
-  const where = search
-    ? or(
-        ilike(orders.customerName, `%${search}%`),
-        ilike(orders.invoiceNumber, `%${search}%`),
-      )
-    : undefined;
-  const rows = await getDb()
-    .select()
-    .from(orders)
-    .where(where)
-    .orderBy(desc(orders.createdDate));
-  const [adjustments, collectionRows] = await Promise.all([
-    getDb().select().from(orderAdjustments),
-    getDb()
-      .select({
-        orderId: collections.orderId,
-        amountSen: collections.collectedSen,
-      })
-      .from(collections),
-  ]);
-  return rows.map((order) => {
-    const adjustmentSen = adjustments
-      .filter((a) => a.orderId === order.id)
-      .reduce(
-        (sum, a) => sum + (a.type === "ADDITION" ? a.amountSen : -a.amountSen),
-        0,
-      );
-    const collectedSen = collectionRows
-      .filter((c) => c.orderId === order.id)
-      .reduce((sum, c) => sum + c.amountSen, 0);
-    const currentTotalSen = order.originalTotalSen + adjustmentSen;
-    return {
-      ...order,
-      currentTotalSen,
-      collectedSen,
-      outstandingSen: currentTotalSen - collectedSen,
-      overCollected: collectedSen > currentTotalSen,
-    };
-  });
-}
-
-export async function listAdjustments(orderId?: string) {
-  const rows = await getDb()
-    .select({
-      adjustment: orderAdjustments,
-      invoiceNumber: orders.invoiceNumber,
-      customerName: orders.customerName,
-      createdByName: staff.name,
-    })
-    .from(orderAdjustments)
-    .innerJoin(orders, eq(orderAdjustments.orderId, orders.id))
-    .innerJoin(staff, eq(orderAdjustments.createdBy, staff.id))
-    .where(orderId ? eq(orderAdjustments.orderId, orderId) : undefined)
-    .orderBy(desc(orderAdjustments.adjustmentDate));
-  return rows;
-}
-
-export type CollectionFilters = {
-  month?: string;
-  staffId?: string;
-  category?: string;
-  source?: string;
-  search?: string;
-};
-
-export async function listCollections(
-  filters: CollectionFilters = {},
-  allowedStaffId?: string,
-) {
+export type CollectionFilters = { month?: string; staffId?: string; category?: string; source?: string; search?: string };
+export async function listCollections(filters: CollectionFilters = {}, allowedStaffId?: string) {
   const conditions = [];
   if (filters.month) {
     conditions.push(gte(collections.collectionDate, `${filters.month}-01`));
     conditions.push(lt(collections.collectionDate, nextMonthStart(filters.month)));
   }
   const targetStaff = allowedStaffId ?? filters.staffId;
-  if (targetStaff)
-    conditions.push(eq(collectionAllocations.staffId, targetStaff));
-  if (
-    filters.category &&
-    ["PRE_WEDDING", "RENTAL", "MAKEUP"].includes(filters.category)
-  )
-    conditions.push(
-      eq(
-        collections.category,
-        filters.category as "PRE_WEDDING" | "RENTAL" | "MAKEUP",
-      ),
-    );
-  if (
-    filters.source &&
-    ["BOOKIT", "MANUAL_ADJUSTMENT"].includes(filters.source)
-  )
-    conditions.push(
-      eq(collections.source, filters.source as "BOOKIT" | "MANUAL_ADJUSTMENT"),
-    );
-  if (filters.search)
-    conditions.push(
-      or(
-        ilike(orders.customerName, `%${filters.search}%`),
-        ilike(orders.invoiceNumber, `%${filters.search}%`),
-      )!,
-    );
-  return getDb()
-    .select({
-      collection: collections,
-      invoiceNumber: orders.invoiceNumber,
-      customerName: orders.customerName,
-      staffId: staff.id,
-      staffName: staff.name,
-      staffActive: staff.active,
-      allocationBps: collectionAllocations.allocationBps,
-      allocatedCollectedSen: collectionAllocations.allocatedCollectedSen,
-      commissionRateBps: collectionAllocations.commissionRateBps,
-      commissionAmountSen: collectionAllocations.commissionAmountSen,
-    })
-    .from(collections)
-    .innerJoin(orders, eq(collections.orderId, orders.id))
-    .innerJoin(
-      collectionAllocations,
-      eq(collectionAllocations.collectionId, collections.id),
-    )
+  if (targetStaff) conditions.push(eq(collectionAllocations.staffId, targetStaff));
+  if (filters.category && ["PRE_WEDDING", "RENTAL", "MAKEUP"].includes(filters.category))
+    conditions.push(eq(collections.category, filters.category as "PRE_WEDDING" | "RENTAL" | "MAKEUP"));
+  if (filters.source && ["BOOKIT", "MANUAL_ADJUSTMENT"].includes(filters.source))
+    conditions.push(eq(collections.source, filters.source as "BOOKIT" | "MANUAL_ADJUSTMENT"));
+  return getDb().select({
+    collection: collections,
+    staffId: staff.id,
+    staffName: staff.name,
+    staffActive: staff.active,
+    allocationBps: collectionAllocations.allocationBps,
+    allocatedCollectedSen: collectionAllocations.allocatedCollectedSen,
+    commissionRateBps: collectionAllocations.commissionRateBps,
+    commissionAmountSen: collectionAllocations.commissionAmountSen,
+  }).from(collections)
+    .innerJoin(collectionAllocations, eq(collectionAllocations.collectionId, collections.id))
     .innerJoin(staff, eq(collectionAllocations.staffId, staff.id))
     .where(conditions.length ? and(...conditions) : undefined)
     .orderBy(desc(collections.collectionDate), desc(collections.createdAt));
@@ -175,56 +53,19 @@ export async function listCollections(
 
 export async function monthlySummaries(month: string, allowedStaffId?: string) {
   const [settings, people, rows, payments] = await Promise.all([
-    getSettings(),
-    listStaff(true),
-    listCollections({ month }, allowedStaffId),
-    getDb()
-      .select()
-      .from(commissionPayments)
-      .where(eq(commissionPayments.commissionMonth, month)),
+    getSettings(), listStaff(true), listCollections({ month }, allowedStaffId),
+    getDb().select().from(commissionPayments).where(eq(commissionPayments.commissionMonth, month)),
   ]);
-  const selectedPeople = allowedStaffId
-    ? people.filter((p) => p.id === allowedStaffId)
-    : people;
+  const selectedPeople = allowedStaffId ? people.filter((p) => p.id === allowedStaffId) : people;
   return selectedPeople.map((person) => {
     const mine = rows.filter((r) => r.staffId === person.id);
-    const category = (name: "PRE_WEDDING" | "RENTAL" | "MAKEUP") =>
-      mine
-        .filter((r) => r.collection.category === name)
-        .reduce((s, r) => s + r.allocatedCollectedSen, 0);
-    const totalCollectedSen = mine.reduce(
-      (s, r) => s + r.allocatedCollectedSen,
-      0,
-    );
+    const category = (name: "PRE_WEDDING" | "RENTAL" | "MAKEUP") => mine.filter((r) => r.collection.category === name).reduce((s, r) => s + r.allocatedCollectedSen, 0);
+    const totalCollectedSen = mine.reduce((s, r) => s + r.allocatedCollectedSen, 0);
     const commissionSen = mine.reduce((s, r) => s + r.commissionAmountSen, 0);
-    const rewardSen = rewardFor(
-      totalCollectedSen,
-      settings.monthlyTargetSen,
-      settings.monthlyRewardSen,
-    );
+    const rewardSen = rewardFor(totalCollectedSen, settings.monthlyTargetSen, settings.monthlyRewardSen);
     const totalPayableSen = commissionSen + rewardSen;
-    const paidSen = payments
-      .filter((p) => p.staffId === person.id)
-      .reduce((s, p) => s + p.paidSen, 0);
-    return {
-      staff: person,
-      month,
-      totalCollectedSen,
-      preWeddingSen: category("PRE_WEDDING"),
-      rentalSen: category("RENTAL"),
-      makeupSen: category("MAKEUP"),
-      commissionSen,
-      rewardSen,
-      totalPayableSen,
-      paidSen,
-      outstandingSen: Math.max(0, totalPayableSen - paidSen),
-      status: paymentStatus(totalPayableSen, paidSen),
-      targetSen: settings.monthlyTargetSen,
-      remainingSen: Math.max(0, settings.monthlyTargetSen - totalCollectedSen),
-      progress: settings.monthlyTargetSen
-        ? Math.min(100, (totalCollectedSen / settings.monthlyTargetSen) * 100)
-        : 100,
-    };
+    const paidSen = payments.filter((p) => p.staffId === person.id).reduce((s, p) => s + p.paidSen, 0);
+    return { staff: person, month, totalCollectedSen, preWeddingSen: category("PRE_WEDDING"), rentalSen: category("RENTAL"), makeupSen: category("MAKEUP"), commissionSen, rewardSen, totalPayableSen, paidSen, outstandingSen: Math.max(0, totalPayableSen - paidSen), status: paymentStatus(totalPayableSen, paidSen), targetSen: settings.monthlyTargetSen, remainingSen: Math.max(0, settings.monthlyTargetSen - totalCollectedSen), progress: settings.monthlyTargetSen ? Math.min(100, (totalCollectedSen / settings.monthlyTargetSen) * 100) : 100 };
   });
 }
 
@@ -232,29 +73,11 @@ export async function getCollectionForEdit(id: string) {
   const rows = await listCollections({});
   const mine = rows.filter((row) => row.collection.id === id);
   if (!mine.length) return null;
-  return {
-    ...mine[0],
-    allocations: mine.map((row) => ({
-      staffId: row.staffId,
-      staffName: row.staffName,
-      allocationBps: row.allocationBps,
-      commissionRateBps: row.commissionRateBps,
-    })),
-  };
+  return { ...mine[0], allocations: mine.map((row) => ({ staffId: row.staffId, staffName: row.staffName, allocationBps: row.allocationBps, commissionRateBps: row.commissionRateBps })) };
 }
-
 export async function paymentHistory(staffId?: string, month?: string) {
   const conditions = [];
   if (staffId) conditions.push(eq(commissionPayments.staffId, staffId));
   if (month) conditions.push(eq(commissionPayments.commissionMonth, month));
-  return getDb()
-    .select({
-      payment: commissionPayments,
-      staffName: staff.name,
-      createdByName: staff.name,
-    })
-    .from(commissionPayments)
-    .innerJoin(staff, eq(commissionPayments.staffId, staff.id))
-    .where(conditions.length ? and(...conditions) : undefined)
-    .orderBy(desc(commissionPayments.paymentDate));
+  return getDb().select({ payment: commissionPayments, staffName: staff.name, createdByName: staff.name }).from(commissionPayments).innerJoin(staff, eq(commissionPayments.staffId, staff.id)).where(conditions.length ? and(...conditions) : undefined).orderBy(desc(commissionPayments.paymentDate));
 }
