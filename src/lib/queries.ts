@@ -65,5 +65,5 @@ export async function paymentHistory(staffId?: string, month?: string) {
   const conditions = [];
   if (staffId) conditions.push(eq(commissionPayments.staffId, staffId));
   if (month) conditions.push(eq(commissionPayments.commissionMonth, month));
-  return getDb().select({ payment: commissionPayments, staffName: staff.name, createdByName: staff.name }).from(commissionPayments).innerJoin(staff, eq(commissionPayments.staffStaffId, staff.id)).where(conditions.length ? and(...conditions) : undefined).orderBy(desc(commissionPayments.paymentDate));
+  return getDb().select({ payment: commissionPayments, staffName: staff.name, createdByName: staff.name }).from(commissionPayments).innerJoin(staff, eq(commissionPayments.staffId, staff.id)).where(conditions.length ? and(...conditions) : undefined).orderBy(desc(commissionPayments.paymentDate));
 }
