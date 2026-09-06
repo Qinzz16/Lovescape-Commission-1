@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, desc, eq, gte, ilike, lt, or } from "drizzle-orm";
+import { and, asc, desc, eq, gte, lt } from "drizzle-orm";
 import { getDb } from "@/db";
 import { collectionAllocations, collections, commissionPayments, commissionSettings, monthlyLocks, staff } from "@/db/schema";
 import { DEFAULT_SETTINGS, paymentStatus, rewardFor } from "@/lib/business";
@@ -31,20 +31,9 @@ export async function listCollections(filters: CollectionFilters = {}, allowedSt
   }
   const targetStaff = allowedStaffId ?? filters.staffId;
   if (targetStaff) conditions.push(eq(collectionAllocations.staffId, targetStaff));
-  if (filters.category && ["PRE_WEDDING", "RENTAL", "MAKEUP"].includes(filters.category))
-    conditions.push(eq(collections.category, filters.category as "PRE_WEDDING" | "RENTAL" | "MAKEUP"));
-  if (filters.source && ["BOOKIT", "MANUAL_ADJUSTMENT"].includes(filters.source))
-    conditions.push(eq(collections.source, filters.source as "BOOKIT" | "MANUAL_ADJUSTMENT"));
-  return getDb().select({
-    collection: collections,
-    staffId: staff.id,
-    staffName: staff.name,
-    staffActive: staff.active,
-    allocationBps: collectionAllocations.allocationBps,
-    allocatedCollectedSen: collectionAllocations.allocatedCollectedSen,
-    commissionRateBps: collectionAllocations.commissionRateBps,
-    commissionAmountSen: collectionAllocations.commissionAmountSen,
-  }).from(collections)
+  if (filters.category && ["PRE_WEDDING", "RENTAL", "MAKEUP"].includes(filters.category)) conditions.push(eq(collections.category, filters.category as "PRE_WEDDING" | "RENTAL" | "MAKEUP"));
+  if (filters.source && ["BOOKIT", "MANUAL_ADJUSTMENT"].includes(filters.source)) conditions.push(eq(collections.source, filters.source as "BOOKIT" | "MANUAL_ADJUSTMENT"));
+  return getDb().select({ collection: collections, staffId: staff.id, staffName: staff.name, staffActive: staff.active, allocationBps: collectionAllocations.allocationBps, allocatedCollectedSen: collectionAllocations.allocatedCollectedSen, commissionRateBps: collectionAllocations.commissionRateBps, commissionAmountSen: collectionAllocations.commissionAmountSen }).from(collections)
     .innerJoin(collectionAllocations, eq(collectionAllocations.collectionId, collections.id))
     .innerJoin(staff, eq(collectionAllocations.staffId, staff.id))
     .where(conditions.length ? and(...conditions) : undefined)
@@ -52,10 +41,7 @@ export async function listCollections(filters: CollectionFilters = {}, allowedSt
 }
 
 export async function monthlySummaries(month: string, allowedStaffId?: string) {
-  const [settings, people, rows, payments] = await Promise.all([
-    getSettings(), listStaff(true), listCollections({ month }, allowedStaffId),
-    getDb().select().from(commissionPayments).where(eq(commissionPayments.commissionMonth, month)),
-  ]);
+  const [settings, people, rows, payments] = await Promise.all([getSettings(), listStaff(true), listCollections({ month }, allowedStaffId), getDb().select().from(commissionPayments).where(eq(commissionPayments.commissionMonth, month))]);
   const selectedPeople = allowedStaffId ? people.filter((p) => p.id === allowedStaffId) : people;
   return selectedPeople.map((person) => {
     const mine = rows.filter((r) => r.staffId === person.id);
@@ -79,5 +65,5 @@ export async function paymentHistory(staffId?: string, month?: string) {
   const conditions = [];
   if (staffId) conditions.push(eq(commissionPayments.staffId, staffId));
   if (month) conditions.push(eq(commissionPayments.commissionMonth, month));
-  return getDb().select({ payment: commissionPayments, staffName: staff.name, createdByName: staff.name }).from(commissionPayments).innerJoin(staff, eq(commissionPayments.staffId, staff.id)).where(conditions.length ? and(...conditions) : undefined).orderBy(desc(commissionPayments.paymentDate));
+  return getDb().select({ payment: commissionPayments, staffName: staff.name, createdByName: staff.name }).from(commissionPayments).innerJoin(staff, eq(commissionPayments.staffStaffId, staff.id)).where(conditions.length ? and(...conditions) : undefined).orderBy(desc(commissionPayments.paymentDate));
 }
