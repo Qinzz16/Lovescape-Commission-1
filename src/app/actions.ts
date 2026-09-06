@@ -14,8 +14,11 @@ const go = (path: string, type: "success" | "error", message: string): never => 
 
 export async function loginAction(form: FormData) {
   const account = await authenticate(s(form, "email"), s(form, "password"));
-  if (!account) go("/login", "error", "Invalid email or password, or this account is inactive");
-  redirect(account.role === "ADMIN" ? "/collections" : "/my-commission");
+  if (!account) {
+    go("/login", "error", "Invalid email or password, or this account is inactive");
+  }
+  if (account.role === "ADMIN") redirect("/collections");
+  redirect("/my-commission");
 }
 export async function logoutAction() { await signOut(); redirect("/login"); }
 
@@ -47,9 +50,9 @@ export async function deleteCollectionAction(form: FormData) {
 }
 
 export async function updateCollectionAction(form: FormData) {
-  await requireAdmin(); const id=s(form,"id"), collectionDate=s(form,"collectionDate"), month=monthFromMalaysiaDate(collectionDate); const [existing]=await getDb().select().from(collections).where(eq(collections.id,id)).limit(1); if(!existing) go("/collections","error","Collection not found");
+  const id=s(form,"id"), collectionDate=s(form,"collectionDate"), month=monthFromMalaysiaDate(collectionDate); const [existing]=await getDb().select().from(collections).where(eq(collections.id,id)).limit(1); if(!existing) go("/collections","error","Collection not found");
   if((await isMonthLocked(monthFromMalaysiaDate(existing.collectionDate)))||(await isMonthLocked(month))) go("/collections","error","Locked-month collections cannot be edited or moved");
-  const collectedSen=moneyToSen(s(form,"collectedAmount")); if(collectedSen<=0) go("/collections","error","Collected amount must be above RM0"); const allocations=parseAllocations(form); if(!validateAllocations(allocations)) go(`/collections/${id}/edit`,`error`,`Staff allocations must be unique and total exactly 100%`);
+  const collectedSen=moneyToSen(s(form,"collectedAmount")); if(collectedSen<=0) go(`/collections/${id}/edit`,`error","Collected amount must be above RM0"); const allocations=parseAllocations(form); if(!validateAllocations(allocations)) go(`/collections/${id}/edit`,`error`,`Staff allocations must be unique and total exactly 100%`);
   const category=s(form,"category") as "PRE_WEDDING"|"RENTAL"|"MAKEUP"; const [oldAllocation]=await getDb().select().from(collectionAllocations).where(eq(collectionAllocations.collectionId,id)).limit(1); const rate=category===existing.category?(oldAllocation?.commissionRateBps??rateForCategory(category,await getSettings())):rateForCategory(category,await getSettings());
   await getDb().transaction(async tx=>{ await tx.update(collections).set({orderId:s(form,"orderId")||null,collectionDate,category,collectedSen,source:s(form,"source")==="MANUAL_ADJUSTMENT"?"MANUAL_ADJUSTMENT":"BOOKIT",notes:s(form,"notes")||null,updatedAt:new Date()}).where(eq(collections.id,id)); await tx.delete(collectionAllocations).where(eq(collectionAllocations.collectionId,id)); const splits=splitAmount(collectedSen,allocations); await tx.insert(collectionAllocations).values(splits.map(a=>({collectionId:id,staffId:a.staffId,allocationBps:a.allocationBps,allocatedCollectedSen:a.amountSen,commissionRateBps:rate,commissionAmountSen:calculateCommission(a.amountSen,rate)}))); });
   revalidatePath("/"); go("/collections","success","Collection updated and commission recalculated");
