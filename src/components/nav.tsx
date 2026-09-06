@@ -1,20 +1,18 @@
 import Link from "next/link";
 import { logoutAction } from "@/app/actions";
+
 const adminLinks = [
-  ["/dashboard", "Dashboard"],
   ["/collections", "Collections"],
-  ["/orders", "Orders"],
-  ["/monthly-commission", "Monthly Commission"],
+  ["/monthly-commission", "Monthly Commissions"],
   ["/history", "Commission History"],
-  ["/staff", "Staff"],
-  ["/reports", "Reports"],
-  ["/settings", "Settings"],
+  ["/reports", "Export Data"],
 ];
+
 const staffLinks = [
-  ["/dashboard", "My Dashboard"],
   ["/my-commission", "My Commission"],
   ["/my-history", "My History"],
 ];
+
 export function Nav({
   account,
 }: {
