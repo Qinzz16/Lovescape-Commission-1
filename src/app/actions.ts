@@ -12,7 +12,11 @@ import { getSettings, isMonthLocked, listCollections, monthlySummaries } from "@
 const s = (form: FormData, key: string) => String(form.get(key) ?? "").trim();
 const go = (path: string, type: "success" | "error", message: string): never => redirect(`${path}?${type}=${encodeURIComponent(message)}`);
 
-export async function loginAction(form: FormData) { const account = await authenticate(s(form, "email"), s(form, "password")); if (!account) go("/login", "error", "Invalid email or password, or this account is inactive"); redirect("/dashboard"); }
+export async function loginAction(form: FormData) {
+  const account = await authenticate(s(form, "email"), s(form, "password"));
+  if (!account) go("/login", "error", "Invalid email or password, or this account is inactive");
+  redirect(account.role === "ADMIN" ? "/collections" : "/my-commission");
+}
 export async function logoutAction() { await signOut(); redirect("/login"); }
 
 export async function createStaffAction(form: FormData) {
