@@ -14,7 +14,7 @@ const go = (path: string, type: "success" | "error", message: string): never => 
 
 export async function loginAction(form: FormData) {
   const account = await authenticate(s(form, "email"), s(form, "password"));
-  if (!account) go("/login", "error", "Invalid email or password, or this account is inactive");
+  if (!account) return go("/login", "error", "Invalid email or password, or this account is inactive");
   if (account.role === "ADMIN") redirect("/collections");
   redirect("/my-commission");
 }
@@ -59,5 +59,5 @@ export async function updateCollectionAction(form: FormData) {
 export async function createPaymentAction(form: FormData) {
   const admin=await requireAdmin(); const staffId=s(form,"staffId"), month=s(form,"commissionMonth"), paidSen=moneyToSen(s(form,"paidAmount")); if(paidSen<=0) go("/monthly-commission","error","Payment must be above RM0"); const [summary]=await monthlySummaries(month,staffId); if(!summary||paidSen>summary.outstandingSen) go("/monthly-commission","error","Payment cannot exceed the outstanding commission"); await getDb().insert(commissionPayments).values({staffId,commissionMonth:month,paidSen,paymentDate:s(form,"paymentDate"),notes:s(form,"notes")||null,createdBy:admin.id}); revalidatePath("/"); go("/monthly-commission","success","Commission payment recorded");
 }
-export async function toggleMonthLockAction(form: FormData) { const admin=await requireAdmin(); const month=s(form,"month"), locked=s(form,"locked")==="true"; await getDb().insert(monthlyLocks).values({month,locked,updatedBy:admin.id}).onConflictDoUpdate({target:monthlyLocks.month,set:{locked,updatedBy:admin.id,updatedAt:new Date()}}); revalidatePath("/"); go("/monthly-commission","success",`${month} ${locked?"locked":"unlocked"}`); }
+export async function toggleMonthLockAction(form: FormData) { const admin=await requireAdmin(); const month=s(form,"month"), locked=s(form,"locked")==="true"; await getDb().insert(monthlyLocks).values({month,locked,updatedBy:admin.id,updatedAt:new Date()}).onConflictDoUpdate({target:monthlyLocks.month,set:{locked,updatedBy:admin.id,updatedAt:new Date()}}); revalidatePath("/"); go("/monthly-commission","success",`${month} ${locked?"locked":"unlocked"}`); }
 export async function updateSettingsAction(form: FormData) { const admin=await requireAdmin(); const values={id:1,preWeddingBps:Math.round(Number(s(form,"preWeddingRate"))*100),rentalBps:Math.round(Number(s(form,"rentalRate"))*100),makeupBps:Math.round(Number(s(form,"makeupRate"))*100),monthlyTargetSen:moneyToSen(s(form,"monthlyTarget")),monthlyRewardSen:moneyToSen(s(form,"monthlyReward")),updatedBy:admin.id,updatedAt:new Date()}; if([values.preWeddingBps,values.rentalBps,values.makeupBps].some(n=>!Number.isInteger(n)||n<0||n>10000)) go("/settings","error","Rates must be between 0% and 100%"); await getDb().insert(commissionSettings).values(values).onConflictDoUpdate({target:commissionSettings.id,set:values}); revalidatePath("/"); go("/settings","success","Settings saved. Historical commission records were unchanged."); }
