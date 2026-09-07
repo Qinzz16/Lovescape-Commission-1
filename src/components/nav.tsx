@@ -5,6 +5,7 @@ const adminLinks = [
   ["/collections", "Collections"],
   ["/monthly-commission", "Monthly Commissions"],
   ["/history", "Commission History"],
+  ["/staff", "Staff"],
   ["/reports", "Export Data"],
 ];
 
