@@ -29,6 +29,22 @@ export async function updateStaffAction(form: FormData) {
   await requireAdmin(); const id=s(form,"id"), password=s(form,"password"); const values: Partial<typeof staff.$inferInsert>={name:s(form,"name"),email:s(form,"email").toLowerCase(),role:s(form,"role")==="ADMIN"?"ADMIN":"STAFF",active:form.get("active")==="on",loginEnabled:form.get("loginEnabled")==="on",updatedAt:new Date()};
   if(password){if(password.length<8) go("/staff","error","New password must be at least 8 characters"); values.passwordHash=await hash(password,12);} await getDb().update(staff).set(values).where(eq(staff.id,id)); revalidatePath("/staff"); go("/staff","success","Staff updated");
 }
+export async function deleteStaffAction(form: FormData) {
+  const admin = await requireAdmin();
+  const id = s(form, "id");
+  if (s(form, "confirm") !== "DELETE") go("/staff", "error", "Type DELETE to confirm permanent staff removal");
+  if (id === admin.id) go("/staff", "error", "You cannot remove your own admin account");
+  const [person] = await getDb().select().from(staff).where(eq(staff.id, id)).limit(1);
+  if (!person) go("/staff", "error", "Staff account not found");
+  if (person.active) go("/staff", "error", "Only inactive staff can be removed permanently");
+  try {
+    await getDb().delete(staff).where(eq(staff.id, id));
+  } catch {
+    go("/staff", "error", "This staff cannot be removed because historical commission, collection, payment, or audit records are linked to the account. Keep the staff inactive instead.");
+  }
+  revalidatePath("/staff");
+  go("/staff", "success", "Inactive staff removed permanently");
+}
 
 function parseAllocations(form: FormData) { const staffIds=form.getAll("staffId").map(String), percentages=form.getAll("allocationPercent").map(String); return staffIds.map((staffId,index)=>({staffId,allocationBps:Math.round(Number(percentages[index])*100)})); }
 
