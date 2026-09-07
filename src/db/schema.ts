@@ -55,11 +55,12 @@ export const orderAdjustments = pgTable("order_adjustments", {
 export const collections = pgTable("collections", {
   id: uuid("id").primaryKey().defaultRandom(),
   orderId: uuid("order_id").references(() => orders.id),
+  customerName: text("customer_name"),
   collectionDate: date("collection_date", { mode: "string" }).notNull(), category: categoryEnum("category").notNull(),
   collectedSen: integer("collected_sen").notNull(), source: sourceEnum("source").notNull().default("BOOKIT"), notes: text("notes"),
   createdBy: uuid("created_by").notNull().references(() => staff.id), createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-}, (t) => [check("collection_positive", sql`${t.collectedSen} > 0`), index("collections_date_idx").on(t.collectionDate), index("collections_order_idx").on(t.orderId)]);
+}, (t) => [check("collection_positive", sql`${t.collectedSen} > 0`), index("collections_date_idx").on(t.collectionDate), index("collections_order_idx").on(t.orderId), index("collections_customer_idx").on(t.customerName)]);
 
 export const collectionAllocations = pgTable("collection_allocations", {
   id: uuid("id").primaryKey().defaultRandom(), collectionId: uuid("collection_id").notNull().references(() => collections.id, { onDelete: "cascade" }),

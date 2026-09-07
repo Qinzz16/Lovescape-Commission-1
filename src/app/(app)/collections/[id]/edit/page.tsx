@@ -22,6 +22,7 @@ export default async function EditCollection({ params, searchParams }: { params:
     <form action={updateCollectionAction} className="card form-grid">
       <input type="hidden" name="id" value={id} />
       <input type="hidden" name="orderId" value={item.collection.orderId || ""} />
+      <label>Customer name<input name="customerName" placeholder="Customer name" defaultValue={item.collection.customerName || ""} /></label>
       <label>Collection date<input type="date" name="collectionDate" defaultValue={item.collection.collectionDate} required /></label>
       <label>Collection category<select name="category" defaultValue={item.collection.category}><option value="PRE_WEDDING">Pre-wedding</option><option value="RENTAL">Rental</option><option value="MAKEUP">Makeup</option></select></label>
       <label>Collected amount (RM)<input name="collectedAmount" inputMode="decimal" defaultValue={(item.collection.collectedSen / 100).toFixed(2)} required /></label>
