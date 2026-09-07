@@ -55,11 +55,12 @@ export const orderAdjustments = pgTable("order_adjustments", {
 export const collections = pgTable("collections", {
   id: uuid("id").primaryKey().defaultRandom(),
   orderId: uuid("order_id").references(() => orders.id),
+  customerName: text("customer_name"),
   collectionDate: date("collection_date", { mode: "string" }).notNull(), category: categoryEnum("category").notNull(),
   collectedSen: integer("collected_sen").notNull(), source: sourceEnum("source").notNull().default("BOOKIT"), notes: text("notes"),
   createdBy: uuid("created_by").notNull().references(() => staff.id), createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-}, (t) => [check("collection_positive", sql`${t.collectedSen} > 0`), index("collections_date_idx").on(t.collectionDate), index("collections_order_idx").on(t.orderId)]);
+}, (t) => [check("collection_positive", sql`${t.collectedSen} > 0`), index("collections_date_idx").on(t.collectionDate), index("collections_order_idx").on(t.orderId), index("collections_customer_idx").on(t.customerName)]);
 
 export const collectionAllocations = pgTable("collection_allocations", {
   id: uuid("id").primaryKey().defaultRandom(), collectionId: uuid("collection_id").notNull().references(() => collections.id, { onDelete: "cascade" }),
@@ -69,7 +70,7 @@ export const collectionAllocations = pgTable("collection_allocations", {
 
 export const commissionPayments = pgTable("commission_payments", {
   id: uuid("id").primaryKey().defaultRandom(), staffId: uuid("staff_id").notNull().references(() => staff.id), commissionMonth: text("commission_month").notNull(), paidSen: integer("paid_sen").notNull(),
-  paymentDate: date("payment_date", { mode: "string" }).notNull(), notes: text("notes"), createdBy: uuid("created_by").notNull().references(() => staff.id), createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  paymentDate: date("payment_date", { mode: "string" }).notNull(), notes: text("notes"), createdBy: uuid("createdBy").notNull().references(() => staff.id), createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [check("payment_positive", sql`${t.paidSen} > 0`), index("payment_staff_month_idx").on(t.staffId, t.commissionMonth)]);
 
 export const monthlyLocks = pgTable("monthly_locks", {
