@@ -29,6 +29,7 @@ export default async function CollectionsPage({ searchParams }: { searchParams: 
     <details className="card">
       <summary>Add collection</summary>
       <form action={createCollectionAction} className="form-grid">
+        <label>Customer name<input name="customerName" placeholder="Customer name" /></label>
         <label>Collection date<input type="date" name="collectionDate" defaultValue={today} required /></label>
         <label>Collection category<select name="category"><option value="PRE_WEDDING">Pre-wedding</option><option value="RENTAL">Rental</option><option value="MAKEUP">Makeup</option></select></label>
         <label>Collected amount (RM)<input name="collectedAmount" inputMode="decimal" required /></label>
@@ -47,9 +48,9 @@ export default async function CollectionsPage({ searchParams }: { searchParams: 
         <label>Source<select name="source" defaultValue={q.source}><option value="">All sources</option><option value="BOOKIT">Bookit</option><option value="MANUAL_ADJUSTMENT">Manual Adjustment</option></select></label>
         <button className="button">Apply filters</button>
       </form>
-      <div className="table-wrap"><table><thead><tr><th>Date</th><th>Category</th><th>Collected</th><th>Allocation & commission</th><th>Source</th><th>Action</th></tr></thead>
+      <div className="table-wrap"><table><thead><tr><th>Customer</th><th>Date</th><th>Category</th><th>Collected</th><th>Allocation & commission</th><th>Source</th><th>Action</th></tr></thead>
       <tbody>{Array.from(grouped.values()).map(({ base, allocations }) => <tr key={base.collection.id}>
-        <td>{base.collection.collectionDate}</td><td>{base.collection.category.replace("_", " ")}</td><td><Money value={base.collection.collectedSen} /></td>
+        <td>{base.collection.customerName || "—"}</td><td>{base.collection.collectionDate}</td><td>{base.collection.category.replace("_", " ")}</td><td><Money value={base.collection.collectedSen} /></td>
         <td>{allocations.map((a) => <div key={a.staffId}>{a.staffName}: <Money value={a.allocatedCollectedSen} /> × {(a.commissionRateBps / 100).toFixed(2)}% = <strong><Money value={a.commissionAmountSen} /></strong></div>)}</td>
         <td>{base.collection.source.replace("_", " ")}</td>
         <td><Link className="button secondary" href={`/collections/${base.collection.id}/edit`}>Edit</Link><details><summary>Delete</summary><form action={deleteCollectionAction} className="stack"><input type="hidden" name="id" value={base.collection.id} /><label>Type DELETE<input name="confirm" /></label><button className="button danger">Delete</button></form></details></td>
