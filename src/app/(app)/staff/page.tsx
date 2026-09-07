@@ -1,4 +1,4 @@
-import { createStaffAction, updateStaffAction } from "@/app/actions";
+import { createStaffAction, deleteStaffAction, updateStaffAction } from "@/app/actions";
 import { requireAdmin } from "@/lib/auth";
 import { listStaff } from "@/lib/queries";
 import { Notice, PageHead, Status } from "@/components/ui";
@@ -13,7 +13,7 @@ export default async function StaffPage({
     <>
       <PageHead
         title="Staff"
-        description="Manage internal access without deleting historical commission records."
+        description="Manage staff access. Inactive staff without linked historical records can be removed permanently."
       />
       <Notice success={q.success} error={q.error} />
       <details className="card">
@@ -92,6 +92,26 @@ export default async function StaffPage({
               </label>
               <button className="button">Save changes</button>
             </form>
+            {!person.active && (
+              <details className="section">
+                <summary>Remove staff permanently</summary>
+                <form action={deleteStaffAction} className="stack">
+                  <input type="hidden" name="id" value={person.id} />
+                  <p className="muted">
+                    This permanently removes the staff account. If historical commission,
+                    collection, payment, or audit records are linked to this person, removal
+                    will be blocked and the account should remain inactive instead.
+                  </p>
+                  <label>
+                    Type DELETE to confirm
+                    <input name="confirm" autoComplete="off" />
+                  </label>
+                  <button className="button danger" type="submit">
+                    Remove staff permanently
+                  </button>
+                </form>
+              </details>
+            )}
           </details>
         ))}
       </section>
