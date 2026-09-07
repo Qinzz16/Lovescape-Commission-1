@@ -70,7 +70,7 @@ export const collectionAllocations = pgTable("collection_allocations", {
 
 export const commissionPayments = pgTable("commission_payments", {
   id: uuid("id").primaryKey().defaultRandom(), staffId: uuid("staff_id").notNull().references(() => staff.id), commissionMonth: text("commission_month").notNull(), paidSen: integer("paid_sen").notNull(),
-  paymentDate: date("payment_date", { mode: "string" }).notNull(), notes: text("notes"), createdBy: uuid("createdBy").notNull().references(() => staff.id), createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  paymentDate: date("payment_date", { mode: "string" }).notNull(), notes: text("notes"), createdBy: uuid("created_by").notNull().references(() => staff.id), createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [check("payment_positive", sql`${t.paidSen} > 0`), index("payment_staff_month_idx").on(t.staffId, t.commissionMonth)]);
 
 export const monthlyLocks = pgTable("monthly_locks", {
