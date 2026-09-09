@@ -83,7 +83,7 @@ export async function deleteCollectionAction(form: FormData) {
 }
 
 export async function updateCollectionAction(form: FormData) {
-  const admin=await requireAdmin(); const id=s(form,"id"), collectionDate=s(form,"collectionDate"), month=monthFromMalaysiaDate(collectionDate); const [existing]=await getDb().select().from(collections).where(eq(collections.id,id)).limit(1); if(!existing) go("/collections","error","Collection not found");
+  await requireAdmin(); const id=s(form,"id"), collectionDate=s(form,"collectionDate"), month=monthFromMalaysiaDate(collectionDate); const [existing]=await getDb().select().from(collections).where(eq(collections.id,id)).limit(1); if(!existing) go("/collections","error","Collection not found");
   if((await isMonthLocked(monthFromMalaysiaDate(existing.collectionDate)))||(await isMonthLocked(month))) go("/collections","error","Locked-month collections cannot be edited or moved");
   const collectedSen=moneyToSen(s(form,"collectedAmount")); if(collectedSen<=0) go(`/collections/${id}/edit`,"error","Collected amount must be above RM0"); const allocations=parseAllocations(form); if(!validateAllocations(allocations)) go(`/collections/${id}/edit`,"error","Staff allocations must be unique and total exactly 100%");
   const category=s(form,"category") as "PRE_WEDDING"|"RENTAL"|"MAKEUP"; const [oldAllocation]=await getDb().select().from(collectionAllocations).where(eq(collectionAllocations.collectionId,id)).limit(1); const rate=category===existing.category?(oldAllocation?.commissionRateBps??rateForCategory(category,await getSettings())):rateForCategory(category,await getSettings());
