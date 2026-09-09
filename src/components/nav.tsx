@@ -3,6 +3,7 @@ import { logoutAction } from "@/app/actions";
 
 const adminLinks = [
   ["/collections", "Collections"],
+  ["/payment-due", "Payment Due"],
   ["/monthly-commission", "Monthly Commissions"],
   ["/history", "Commission History"],
   ["/staff", "Staff"],
