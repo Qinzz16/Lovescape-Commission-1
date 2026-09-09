@@ -1,7 +1,7 @@
 import "server-only";
 import { and, asc, desc, eq, gte, lt } from "drizzle-orm";
 import { getDb } from "@/db";
-import { collectionAllocations, collections, commissionPayments, commissionSettings, monthlyLocks, staff } from "@/db/schema";
+import { collectionAllocations, collections, commissionPayments, commissionSettings, monthlyLocks, paymentScheduleAllocations, paymentSchedules, staff } from "@/db/schema";
 import { DEFAULT_SETTINGS, paymentStatus, rewardFor } from "@/lib/business";
 
 function nextMonthStart(month: string) {
@@ -38,6 +38,22 @@ export async function listCollections(filters: CollectionFilters = {}, allowedSt
     .innerJoin(staff, eq(collectionAllocations.staffId, staff.id))
     .where(conditions.length ? and(...conditions) : undefined)
     .orderBy(desc(collections.collectionDate), desc(collections.createdAt));
+}
+
+export async function listPaymentSchedules() {
+  const [schedules, people, allocations] = await Promise.all([
+    getDb().select().from(paymentSchedules).orderBy(asc(paymentSchedules.dueDate), asc(paymentSchedules.paymentNumber)),
+    listStaff(true),
+    getDb().select().from(paymentScheduleAllocations),
+  ]);
+  const peopleById = new Map(people.map((person) => [person.id, person]));
+  const paidBySchedule = new Map<string, number>();
+  for (const allocation of allocations) paidBySchedule.set(allocation.scheduleId, (paidBySchedule.get(allocation.scheduleId) ?? 0) + allocation.allocatedSen);
+  return schedules.map((schedule) => {
+    const paidSen = paidBySchedule.get(schedule.id) ?? 0;
+    const outstandingSen = Math.max(0, schedule.expectedSen - paidSen);
+    return { schedule, paidSen, outstandingSen, staff: schedule.staffId ? peopleById.get(schedule.staffId) ?? null : null };
+  });
 }
 
 export async function monthlySummaries(month: string, allowedStaffId?: string) {
