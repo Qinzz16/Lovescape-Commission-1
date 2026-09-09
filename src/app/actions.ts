@@ -2,9 +2,9 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { hash } from "bcryptjs";
-import { eq } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { getDb } from "@/db";
-import { collectionAllocations, collections, commissionPayments, commissionSettings, monthlyLocks, staff } from "@/db/schema";
+import { collectionAllocations, collections, commissionPayments, commissionSettings, monthlyLocks, paymentScheduleAllocations, paymentSchedules, staff } from "@/db/schema";
 import { authenticate, requireAdmin, signOut } from "@/lib/auth";
 import { calculateCommission, isSuspiciousDuplicate, moneyToSen, monthFromMalaysiaDate, rateForCategory, splitAmount, validateAllocations } from "@/lib/business";
 import { getSettings, isMonthLocked, listCollections, monthlySummaries } from "@/lib/queries";
@@ -48,6 +48,24 @@ export async function deleteStaffAction(form: FormData) {
 
 function parseAllocations(form: FormData) { const staffIds=form.getAll("staffId").map(String), percentages=form.getAll("allocationPercent").map(String); return staffIds.map((staffId,index)=>({staffId,allocationBps:Math.round(Number(percentages[index])*100)})); }
 
+async function applyCollectionToSchedules(collectionId: string, customerName: string | null, amountSen: number) {
+  if (!customerName || amountSen <= 0) return;
+  const db = getDb();
+  const schedules = await db.select().from(paymentSchedules).where(eq(paymentSchedules.customerName, customerName)).orderBy(asc(paymentSchedules.dueDate), asc(paymentSchedules.paymentNumber));
+  let remaining = amountSen;
+  for (const schedule of schedules) {
+    if (remaining <= 0) break;
+    const existing = await db.select().from(paymentScheduleAllocations).where(eq(paymentScheduleAllocations.scheduleId, schedule.id));
+    const paidSen = existing.reduce((sum, row) => sum + row.allocatedSen, 0);
+    const availableSen = Math.max(0, schedule.expectedSen - paidSen);
+    const appliedSen = Math.min(remaining, availableSen);
+    if (appliedSen > 0) {
+      await db.insert(paymentScheduleAllocations).values({ scheduleId: schedule.id, collectionId, allocatedSen: appliedSen });
+      remaining -= appliedSen;
+    }
+  }
+}
+
 export async function createCollectionAction(form: FormData) {
   const admin=await requireAdmin(); const collectionDate=s(form,"collectionDate"), month=monthFromMalaysiaDate(collectionDate); if(await isMonthLocked(month)) go("/collections","error",`${month} is locked`);
   const orderId=s(form,"orderId"), customerName=s(form,"customerName"), collectedSen=moneyToSen(s(form,"collectedAmount")); if(collectedSen<=0) go("/collections","error","Collected amount must be above RM0");
@@ -56,6 +74,7 @@ export async function createCollectionAction(form: FormData) {
   const category=s(form,"category") as "PRE_WEDDING"|"RENTAL"|"MAKEUP", rate=rateForCategory(category,await getSettings());
   const [created]=await getDb().insert(collections).values({orderId:orderId||null,customerName:customerName||null,collectionDate,category,collectedSen,source:s(form,"source")==="MANUAL_ADJUSTMENT"?"MANUAL_ADJUSTMENT":"BOOKIT",notes:s(form,"notes")||null,createdBy:admin.id}).returning();
   const splits=splitAmount(collectedSen,allocations); await getDb().insert(collectionAllocations).values(splits.map(a=>({collectionId:created.id,staffId:a.staffId,allocationBps:a.allocationBps,allocatedCollectedSen:a.amountSen,commissionRateBps:rate,commissionAmountSen:calculateCommission(a.amountSen,rate)})));
+  await applyCollectionToSchedules(created.id, customerName || null, collectedSen);
   revalidatePath("/"); go("/collections","success","Collection recorded with commission rate preserved");
 }
 
@@ -68,8 +87,33 @@ export async function updateCollectionAction(form: FormData) {
   if((await isMonthLocked(monthFromMalaysiaDate(existing.collectionDate)))||(await isMonthLocked(month))) go("/collections","error","Locked-month collections cannot be edited or moved");
   const collectedSen=moneyToSen(s(form,"collectedAmount")); if(collectedSen<=0) go(`/collections/${id}/edit`,"error","Collected amount must be above RM0"); const allocations=parseAllocations(form); if(!validateAllocations(allocations)) go(`/collections/${id}/edit`,"error","Staff allocations must be unique and total exactly 100%");
   const category=s(form,"category") as "PRE_WEDDING"|"RENTAL"|"MAKEUP"; const [oldAllocation]=await getDb().select().from(collectionAllocations).where(eq(collectionAllocations.collectionId,id)).limit(1); const rate=category===existing.category?(oldAllocation?.commissionRateBps??rateForCategory(category,await getSettings())):rateForCategory(category,await getSettings());
-  await getDb().transaction(async tx=>{ await tx.update(collections).set({orderId:s(form,"orderId")||null,customerName:s(form,"customerName")||null,collectionDate,category,collectedSen,source:s(form,"source")==="MANUAL_ADJUSTMENT"?"MANUAL_ADJUSTMENT":"BOOKIT",notes:s(form,"notes")||null,updatedAt:new Date()}).where(eq(collections.id,id)); await tx.delete(collectionAllocations).where(eq(collectionAllocations.collectionId,id)); const splits=splitAmount(collectedSen,allocations); await tx.insert(collectionAllocations).values(splits.map(a=>({collectionId:id,staffId:a.staffId,allocationBps:a.allocationBps,allocatedCollectedSen:a.amountSen,commissionRateBps:rate,commissionAmountSen:calculateCommission(a.amountSen,rate)}))); });
+  const customerName=s(form,"customerName") || null;
+  await getDb().transaction(async tx=>{ await tx.delete(paymentScheduleAllocations).where(eq(paymentScheduleAllocations.collectionId,id)); await tx.update(collections).set({orderId:s(form,"orderId")||null,customerName,collectionDate,category,collectedSen,source:s(form,"source")==="MANUAL_ADJUSTMENT"?"MANUAL_ADJUSTMENT":"BOOKIT",notes:s(form,"notes")||null,updatedAt:new Date()}).where(eq(collections.id,id)); await tx.delete(collectionAllocations).where(eq(collectionAllocations.collectionId,id)); const splits=splitAmount(collectedSen,allocations); await tx.insert(collectionAllocations).values(splits.map(a=>({collectionId:id,staffId:a.staffId,allocationBps:a.allocationBps,allocatedCollectedSen:a.amountSen,commissionRateBps:rate,commissionAmountSen:calculateCommission(a.amountSen,rate)}))); });
+  await applyCollectionToSchedules(id, customerName, collectedSen);
   revalidatePath("/"); go("/collections","success","Collection updated and commission recalculated");
+}
+
+export async function createPaymentScheduleAction(form: FormData) {
+  const admin = await requireAdmin();
+  const customerName = s(form, "customerName");
+  const paymentNumber = Number(s(form, "paymentNumber"));
+  const dueDate = s(form, "dueDate");
+  const expectedSen = moneyToSen(s(form, "expectedAmount"));
+  const staffId = s(form, "staffId");
+  if (!customerName || !dueDate || !Number.isInteger(paymentNumber) || paymentNumber < 1 || expectedSen <= 0) go("/payment-due", "error", "Customer, payment number, due date and amount are required");
+  const [created] = await getDb().insert(paymentSchedules).values({ customerName, paymentNumber, dueDate, expectedSen, staffId: staffId || null, notes: s(form, "notes") || null, createdBy: admin.id }).returning();
+  const existingCollections = await getDb().select().from(collections).where(eq(collections.customerName, customerName)).orderBy(asc(collections.collectionDate), asc(collections.createdAt));
+  for (const collection of existingCollections) await applyCollectionToSchedules(collection.id, customerName, collection.collectedSen);
+  revalidatePath("/payment-due"); go("/payment-due", "success", `Payment ${created.paymentNumber} scheduled for ${created.dueDate}`);
+}
+
+export async function deletePaymentScheduleAction(form: FormData) {
+  await requireAdmin();
+  const id = s(form, "id");
+  if (!id) go("/payment-due", "error", "Payment schedule not found");
+  await getDb().delete(paymentSchedules).where(eq(paymentSchedules.id, id));
+  revalidatePath("/payment-due");
+  go("/payment-due", "success", "Payment schedule deleted");
 }
 
 export async function createPaymentAction(form: FormData) {

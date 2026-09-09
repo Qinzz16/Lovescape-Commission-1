@@ -68,6 +68,27 @@ export const collectionAllocations = pgTable("collection_allocations", {
   commissionRateBps: integer("commission_rate_bps").notNull(), commissionAmountSen: integer("commission_amount_sen").notNull(), createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [uniqueIndex("allocation_collection_staff_unique").on(t.collectionId, t.staffId), index("allocation_staff_idx").on(t.staffId), check("allocation_bps_valid", sql`${t.allocationBps} > 0 AND ${t.allocationBps} <= 10000`)]);
 
+export const paymentSchedules = pgTable("payment_schedules", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  customerName: text("customer_name").notNull(),
+  paymentNumber: integer("payment_number").notNull(),
+  dueDate: date("due_date", { mode: "string" }).notNull(),
+  expectedSen: integer("expected_sen").notNull(),
+  staffId: uuid("staff_id").references(() => staff.id),
+  notes: text("notes"),
+  createdBy: uuid("created_by").notNull().references(() => staff.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [check("schedule_positive", sql`${t.expectedSen} > 0`), check("schedule_payment_number_positive", sql`${t.paymentNumber} > 0`), index("schedule_customer_idx").on(t.customerName), index("schedule_due_date_idx").on(t.dueDate)]);
+
+export const paymentScheduleAllocations = pgTable("payment_schedule_allocations", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  scheduleId: uuid("schedule_id").notNull().references(() => paymentSchedules.id, { onDelete: "cascade" }),
+  collectionId: uuid("collection_id").notNull().references(() => collections.id, { onDelete: "cascade" }),
+  allocatedSen: integer("allocated_sen").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [uniqueIndex("schedule_collection_unique").on(t.scheduleId, t.collectionId), check("schedule_allocation_positive", sql`${t.allocatedSen} > 0`), index("schedule_allocation_schedule_idx").on(t.scheduleId), index("schedule_allocation_collection_idx").on(t.collectionId)]);
+
 export const commissionPayments = pgTable("commission_payments", {
   id: uuid("id").primaryKey().defaultRandom(), staffId: uuid("staff_id").notNull().references(() => staff.id), commissionMonth: text("commission_month").notNull(), paidSen: integer("paid_sen").notNull(),
   paymentDate: date("payment_date", { mode: "string" }).notNull(), notes: text("notes"), createdBy: uuid("created_by").notNull().references(() => staff.id), createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
