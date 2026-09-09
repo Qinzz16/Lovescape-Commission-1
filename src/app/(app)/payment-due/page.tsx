@@ -29,7 +29,7 @@ export default async function PaymentDuePage({ searchParams }: { searchParams: P
       <td><Money value={row.outstandingSen} /></td>
       <td>{row.staff?.name || "—"}</td>
       <td><span className={row.schedule.dueDate < today ? "status danger" : "status"}>{row.schedule.dueDate < today ? "Overdue" : "Pending"}</span></td>
-      <td><details><summary>Delete</summary><form action={deletePaymentScheduleAction} className="stack"><input type="hidden" name="id" value={row.schedule.id} /><p className="muted">Delete this payment schedule? Any payment matching attached to it will become available for the customer's other outstanding schedules.</p><button className="button danger">Delete</button></form></details></td>
+      <td><details><summary>Delete</summary><form action={deletePaymentScheduleAction} className="stack"><input type="hidden" name="id" value={row.schedule.id} /><p className="muted">Delete this payment schedule? Any payment matching attached to it will become available for the customer&apos;s other outstanding schedules.</p><button className="button danger">Delete</button></form></details></td>
     </tr>
   )) : <tr><td colSpan={7}>No outstanding payments in this section.</td></tr>;
 
