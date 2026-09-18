@@ -30,6 +30,7 @@ export default async function CollectionsPage({ searchParams }: { searchParams: 
       <summary>Add collection</summary>
       <form action={createCollectionAction} className="form-grid">
         <label>Customer name<input name="customerName" placeholder="Customer name" /></label>
+        <label>Booking date<input type="date" name="bookingDate" defaultValue={today} required /></label>
         <label>Collection date<input type="date" name="collectionDate" defaultValue={today} required /></label>
         <label>Wedding / Pickup date<input type="date" name="weddingPickupDate" /></label>
         <label>Collection category<select name="category"><option value="PRE_WEDDING">Pre-wedding</option><option value="RENTAL">Rental</option><option value="MAKEUP">Makeup</option></select></label>
