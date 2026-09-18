@@ -6,6 +6,8 @@ type Summary = {
   preWeddingSen: number;
   rentalSen: number;
   makeupSen: number;
+  bookingPortionSen: number;
+  weddingPortionSen: number;
   commissionSen: number;
   rewardSen: number;
   totalPayableSen: number;
@@ -38,7 +40,9 @@ export function SummaryTable({
                 <th>Makeup</th>
               </>
             ) : null}
-            <th>Commission</th>
+            <th>Booking portion</th>
+            <th>Wedding / pickup portion</th>
+            <th>Total commission</th>
             <th>Reward</th>
             <th>Payable</th>
             <th>Paid</th>
@@ -71,9 +75,9 @@ export function SummaryTable({
                   </td>
                 </>
               ) : null}
-              <td>
-                <Money value={row.commissionSen} />
-              </td>
+              <td><Money value={row.bookingPortionSen} /></td>
+              <td><Money value={row.weddingPortionSen} /></td>
+              <td><Money value={row.commissionSen} /></td>
               <td>
                 <Money value={row.rewardSen} />
               </td>
