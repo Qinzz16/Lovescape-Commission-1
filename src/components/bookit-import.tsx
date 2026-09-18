@@ -28,7 +28,7 @@ function parseCsv(text: string): Record<string, string>[] {
 }
 
 function splitNames(value: string) {
-  return value.split(/[,;\n]+/).map((x) => x.trim()).filter(Boolean);
+  return value.split(/[,;\n]+/).map((x) => x.trim()).filter((x) => x && x !== "-");
 }
 
 export function BookitImportForm({ people }: { people: Person[] }) {
@@ -137,7 +137,7 @@ export function BookitImportForm({ people }: { people: Person[] }) {
 
         <form action={importBookitPaymentsAction} className="card">
           <input type="hidden" name="rowsJson" value={JSON.stringify(normalizedRows)} />
-          <input type="hidden" name="staffMapping" value={JSON.stringify(mapping)} />
+          <input type="hidden" name="staffMapping" value={JSON.stringify(mapping)} />\n          <label>Fallback staff for zero-commission rows without a usable Bookit staff name<select name="fallbackStaffId" defaultValue=""><option value="">Do not assign automatically</option>{people.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>\n          <p className="muted">This is only used for rows with zero Bookit commission and no mapped Team Members, such as system cashier or “-” rows.</p>
           {(!mappingComplete || missingCommission) ? <div className="notice error">Please map every detected Bookit staff name before importing. Commission staff cannot be ignored.</div> : null}
           <button className="button" type="submit" disabled={!mappingComplete || missingCommission}>Import {rows.length} payments</button>
         </form>
