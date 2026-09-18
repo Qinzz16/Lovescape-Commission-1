@@ -119,7 +119,7 @@ export async function importBookitPaymentsAction(form: FormData) {
     go("/bookit-import", "error", "The uploaded Bookit file could not be read.");
   }
   if (!Array.isArray(rows) || rows.length === 0 || rows.length > 5000) go("/bookit-import", "error", "Please upload a valid Bookit CSV with between 1 and 5,000 payment rows.");
-  const people = await getDb().select().from(staff);
+  const people = await getDb().select().from(staff);\n  const fallbackStaffId = s(form, "fallbackStaffId");
   const peopleById = new Map(people.map((p) => [p.id, p]));
   const settings = await getSettings();
   let imported = 0;
