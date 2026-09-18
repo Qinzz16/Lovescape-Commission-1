@@ -1,9 +1,42 @@
 import { hash } from "bcryptjs";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { migrate } from "drizzle-orm/neon-http/migrator";
 import { getDb } from "../src/db";
 import { commissionSettings, staff } from "../src/db/schema";
 import { DEFAULT_SETTINGS } from "../src/lib/business";
+
+async function ensureCommissionSettingsSchema() {
+  const db = getDb();
+
+  // Some existing Neon databases were created before the current Drizzle
+  // migration history and can therefore be missing one or more settings
+  // columns even though Drizzle considers the initial migration applied.
+  // Keep the bootstrap idempotent and repair that schema drift before the
+  // default-settings insert runs.
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS "commission_settings" (
+      "id" integer PRIMARY KEY DEFAULT 1 NOT NULL,
+      "pre_wedding_bps" integer DEFAULT 300 NOT NULL,
+      "rental_bps" integer DEFAULT 600 NOT NULL,
+      "makeup_bps" integer DEFAULT 0 NOT NULL,
+      "monthly_target_sen" integer DEFAULT 3000000 NOT NULL,
+      "monthly_reward_sen" integer DEFAULT 30000 NOT NULL,
+      "updated_by" uuid,
+      "updated_at" timestamp with time zone DEFAULT now() NOT NULL
+    )
+  `);
+
+  await db.execute(sql`
+    ALTER TABLE "commission_settings"
+      ADD COLUMN IF NOT EXISTS "pre_wedding_bps" integer DEFAULT 300 NOT NULL,
+      ADD COLUMN IF NOT EXISTS "rental_bps" integer DEFAULT 600 NOT NULL,
+      ADD COLUMN IF NOT EXISTS "makeup_bps" integer DEFAULT 0 NOT NULL,
+      ADD COLUMN IF NOT EXISTS "monthly_target_sen" integer DEFAULT 3000000 NOT NULL,
+      ADD COLUMN IF NOT EXISTS "monthly_reward_sen" integer DEFAULT 30000 NOT NULL,
+      ADD COLUMN IF NOT EXISTS "updated_by" uuid,
+      ADD COLUMN IF NOT EXISTS "updated_at" timestamp with time zone DEFAULT now() NOT NULL
+  `);
+}
 
 async function main() {
   const db = getDb();
@@ -11,6 +44,8 @@ async function main() {
   console.log("Running database migrations...");
   await migrate(db, { migrationsFolder: "./drizzle" });
   console.log("Database migrations complete.");
+
+  await ensureCommissionSettingsSchema();
 
   await db
     .insert(commissionSettings)
