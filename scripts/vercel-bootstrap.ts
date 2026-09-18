@@ -8,14 +8,11 @@ import { DEFAULT_SETTINGS } from "../src/lib/business";
 async function ensureCommissionSettingsSchema() {
   const db = getDb();
 
-  // Some existing Neon databases were created before the current Drizzle
-  // migration history and can therefore be missing one or more settings
-  // columns even though Drizzle considers the initial migration applied.
-  // Keep the bootstrap idempotent and repair that schema drift before the
-  // default-settings insert runs.
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS "commission_settings" (
       "id" integer PRIMARY KEY DEFAULT 1 NOT NULL,
+      "booking_portion_bps" integer DEFAULT 5000 NOT NULL,
+      "wedding_portion_bps" integer DEFAULT 5000 NOT NULL,
       "pre_wedding_bps" integer DEFAULT 300 NOT NULL,
       "rental_bps" integer DEFAULT 600 NOT NULL,
       "makeup_bps" integer DEFAULT 0 NOT NULL,
@@ -28,6 +25,8 @@ async function ensureCommissionSettingsSchema() {
 
   await db.execute(sql`
     ALTER TABLE "commission_settings"
+      ADD COLUMN IF NOT EXISTS "booking_portion_bps" integer DEFAULT 5000 NOT NULL,
+      ADD COLUMN IF NOT EXISTS "wedding_portion_bps" integer DEFAULT 5000 NOT NULL,
       ADD COLUMN IF NOT EXISTS "pre_wedding_bps" integer DEFAULT 300 NOT NULL,
       ADD COLUMN IF NOT EXISTS "rental_bps" integer DEFAULT 600 NOT NULL,
       ADD COLUMN IF NOT EXISTS "makeup_bps" integer DEFAULT 0 NOT NULL,

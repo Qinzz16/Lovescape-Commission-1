@@ -17,6 +17,9 @@ export default async function SettingsPage({
       />
       <Notice success={q.success} error={q.error} />
       <form action={updateSettingsAction} className="card form-grid">
+        <div className="full notice"><strong>Commission payment split</strong><br />By default, commission is split 50% for the booking portion and 50% for the wedding / pickup portion. The booking portion is released in the collection month; the wedding / pickup portion is released in the wedding / pickup month.</div>
+        <label>Booking portion (%)<input name="bookingPortionRate" type="number" min="0" max="100" step="0.01" defaultValue={settings.bookingPortionBps / 100} required /></label>
+        <label>Wedding / pickup portion (%)<input name="weddingPortionRate" type="number" min="0" max="100" step="0.01" defaultValue={settings.weddingPortionBps / 100} required /></label>
         <label>
           Pre-wedding commission rate (%)
           <input
