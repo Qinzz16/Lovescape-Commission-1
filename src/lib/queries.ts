@@ -1,7 +1,7 @@
 import "server-only";
 import { and, asc, desc, eq, gte, lt } from "drizzle-orm";
 import { getDb } from "@/db";
-import { collectionAllocations, collections, commissionPayments, commissionSettings, monthlyLocks, paymentScheduleAllocations, paymentSchedules, staff } from "@/db/schema";
+import { collectionAllocations, collections, commissionPayments, commissionPortions, commissionSettings, monthlyLocks, paymentScheduleAllocations, paymentSchedules, staff } from "@/db/schema";
 import { DEFAULT_SETTINGS, paymentStatus, rewardFor } from "@/lib/business";
 
 function nextMonthStart(month: string) {
@@ -57,13 +57,13 @@ export async function listPaymentSchedules() {
 }
 
 export async function monthlySummaries(month: string, allowedStaffId?: string) {
-  const [settings, people, rows, payments] = await Promise.all([getSettings(), listStaff(true), listCollections({ month }, allowedStaffId), getDb().select().from(commissionPayments).where(eq(commissionPayments.commissionMonth, month))]);
+  const [settings, people, rows, payments, portions] = await Promise.all([getSettings(), listStaff(true), listCollections({ month }, allowedStaffId), getDb().select().from(commissionPayments).where(eq(commissionPayments.commissionMonth, month)), getDb().select().from(commissionPortions).where(eq(commissionPortions.releaseMonth, month))]);
   const selectedPeople = allowedStaffId ? people.filter((p) => p.id === allowedStaffId) : people;
   return selectedPeople.map((person) => {
     const mine = rows.filter((r) => r.staffId === person.id);
     const category = (name: "PRE_WEDDING" | "RENTAL" | "MAKEUP") => mine.filter((r) => r.collection.category === name).reduce((s, r) => s + r.allocatedCollectedSen, 0);
     const totalCollectedSen = mine.reduce((s, r) => s + r.allocatedCollectedSen, 0);
-    const commissionSen = mine.reduce((s, r) => s + r.commissionAmountSen, 0);
+    const commissionSen = portions.filter((p) => p.staffId === person.id).reduce((s, p) => s + p.amountSen, 0);
     const rewardSen = rewardFor(totalCollectedSen, settings.monthlyTargetSen, settings.monthlyRewardSen);
     const totalPayableSen = commissionSen + rewardSen;
     const paidSen = payments.filter((p) => p.staffId === person.id).reduce((s, p) => s + p.paidSen, 0);
