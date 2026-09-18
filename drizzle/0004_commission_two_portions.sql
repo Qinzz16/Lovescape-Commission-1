@@ -2,6 +2,8 @@ ALTER TABLE "commission_settings" ADD COLUMN "booking_portion_bps" integer DEFAU
 --> statement-breakpoint
 ALTER TABLE "commission_settings" ADD COLUMN "wedding_portion_bps" integer DEFAULT 5000 NOT NULL;
 --> statement-breakpoint
+ALTER TABLE "collections" ADD COLUMN "booking_date" date;
+--> statement-breakpoint
 ALTER TABLE "collections" ADD COLUMN "wedding_pickup_date" date;
 --> statement-breakpoint
 CREATE TABLE "commission_portions" (
@@ -26,7 +28,7 @@ ALTER TABLE "commission_portions" ADD CONSTRAINT "commission_portions_collection
 ALTER TABLE "commission_portions" ADD CONSTRAINT "commission_portions_staff_id_staff_id_fk" FOREIGN KEY ("staff_id") REFERENCES "staff"("id");
 --> statement-breakpoint
 INSERT INTO "commission_portions" ("collection_id","staff_id","portion","release_month","amount_sen")
-SELECT ca.collection_id, ca.staff_id, 1, substring(c.collection_date::text,1,7),
+SELECT ca.collection_id, ca.staff_id, 1, substring(coalesce(c.booking_date, c.collection_date)::text,1,7),
        round(ca.commission_amount_sen * 0.5)
 FROM "collection_allocations" ca
 JOIN "collections" c ON c.id = ca.collection_id
