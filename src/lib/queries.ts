@@ -34,8 +34,8 @@ export async function listCollections(filters: CollectionFilters = {}, allowedSt
   if (filters.category && ["PRE_WEDDING", "RENTAL", "MAKEUP"].includes(filters.category)) conditions.push(eq(collections.category, filters.category as "PRE_WEDDING" | "RENTAL" | "MAKEUP"));
   if (filters.source && ["BOOKIT", "MANUAL_ADJUSTMENT"].includes(filters.source)) conditions.push(eq(collections.source, filters.source as "BOOKIT" | "MANUAL_ADJUSTMENT"));
   return getDb().select({ collection: collections, staffId: staff.id, staffName: staff.name, staffActive: staff.active, allocationBps: collectionAllocations.allocationBps, allocatedCollectedSen: collectionAllocations.allocatedCollectedSen, commissionRateBps: collectionAllocations.commissionRateBps, commissionAmountSen: collectionAllocations.commissionAmountSen }).from(collections)
-    .innerJoin(collectionAllocations, eq(collectionAllocations.collectionId, collections.id))
-    .innerJoin(staff, eq(collectionAllocations.staffId, staff.id))
+    .leftJoin(collectionAllocations, eq(collectionAllocations.collectionId, collections.id))
+    .leftJoin(staff, eq(collectionAllocations.staffId, staff.id))
     .where(conditions.length ? and(...conditions) : undefined)
     .orderBy(desc(collections.collectionDate), desc(collections.createdAt));
 }
