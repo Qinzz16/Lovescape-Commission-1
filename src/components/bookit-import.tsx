@@ -31,15 +31,23 @@ function splitNames(value: string) { return value.split(/[,;\n]+/).map((x) => x.
 
 export function BookitImportForm({ people }: { people: Person[] }) {
   const [rows, setRows] = useState<RawRow[]>([]); const [fileName, setFileName] = useState(""); const [error, setError] = useState("");
-  const normalizedRows = useMemo<NormalizedRow[]>(() => rows.map((row) => ({
-    paymentId: row["Payment ID"] ?? "", paymentDate: row["Payment date"] ?? "", customerName: row["Customer"] ?? "",
-    collectionAmount: row["Total collection"] ?? "", totalCommission: row["Total commission (RM)"] ?? row["Total commission"] ?? "0",
-    items: row["Items"] ?? "", catalogueType: row["Catalogue type"] ?? "", bookingId: row["Booking ID"] ?? "",
-    teamMembers: splitNames(row["Team members"] ?? ""),
-    commissionByStaff: Object.keys(row).filter((key) => key.endsWith(" Commissions (RM)"))
-      .map((key) => ({ name: key.replace(/ Commissions \(RM\)$/, "").trim(), amount: row[key] }))
-      .filter((x) => x.name && x.amount && x.amount !== "-" && Number(x.amount.replace(/,/g, "")) > 0),
-  })), [rows]));
+  const normalizedRows = useMemo<NormalizedRow[]>(() => {
+    return rows.map((row) => ({
+      paymentId: row["Payment ID"] ?? "",
+      paymentDate: row["Payment date"] ?? "",
+      customerName: row["Customer"] ?? "",
+      collectionAmount: row["Total collection"] ?? "",
+      totalCommission: row["Total commission (RM)"] ?? row["Total commission"] ?? "0",
+      items: row["Items"] ?? "",
+      catalogueType: row["Catalogue type"] ?? "",
+      bookingId: row["Booking ID"] ?? "",
+      teamMembers: splitNames(row["Team members"] ?? ""),
+      commissionByStaff: Object.keys(row)
+        .filter((key) => key.endsWith(" Commissions (RM)"))
+        .map((key) => ({ name: key.replace(/ Commissions \(RM\)$/, "").trim(), amount: row[key] }))
+        .filter((x) => x.name && x.amount && x.amount !== "-" && Number(x.amount.replace(/,/g, "")) > 0),
+    }));
+  }, [rows]);
   const unknownCommissionStaff = useMemo(() => {
     const known = new Set(people.map((p) => norm(p.name)));
     return [...new Set(normalizedRows.flatMap((r) => r.commissionByStaff.map((x) => x.name)).filter((name) => !known.has(norm(name))))].sort();
