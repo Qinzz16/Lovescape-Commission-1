@@ -30,7 +30,7 @@ export default async function EditCollection({ params, searchParams }: { params:
       <label>Collected amount (RM)<input name="collectedAmount" inputMode="decimal" defaultValue={(item.collection.collectedSen / 100).toFixed(2)} required /></label>
       <label>Source<select name="source" defaultValue={item.collection.source}><option value="BOOKIT">Bookit</option><option value="MANUAL_ADJUSTMENT">Manual Adjustment</option></select></label>
       <label className="full">Notes<textarea name="notes" defaultValue={item.collection.notes || ""} /></label>
-      <EditableAllocations people={people} initial={item.allocations} />
+      <EditableAllocations people={people} initial={item.allocations.length ? item.allocations : [{ staffId: "", allocationBps: 10000 }]} />
       <div className="actions full"><button className="button">Save changes</button><a className="button secondary" href="/collections">Cancel</a></div>
     </form>
   </>;
