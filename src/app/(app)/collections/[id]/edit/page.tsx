@@ -16,6 +16,7 @@ export default async function EditCollection({ params, searchParams }: { params:
     listStaff(false),
   ]);
   if (locked) redirect("/collections?error=Locked+month+collections+cannot+be+edited");
+  const isBookit = Boolean(item.collection.bookitPaymentId);
   return <>
     <PageHead title="Edit Collection" description="Changing amount or allocation recalculates commission." actions={<Status value="Unlocked" />} />
     <Notice error={q.error} />
