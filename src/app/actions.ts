@@ -239,14 +239,54 @@ export async function deleteCollectionAction(form: FormData) {
 }
 
 export async function updateCollectionAction(form: FormData) {
-  await requireAdmin(); const id=s(form,"id"), collectionDate=s(form,"collectionDate"), month=monthFromMalaysiaDate(collectionDate); const [existing]=await getDb().select().from(collections).where(eq(collections.id,id)).limit(1); if(!existing) go("/collections","error","Collection not found");
-  if((await isMonthLocked(monthFromMalaysiaDate(existing.collectionDate)))||(await isMonthLocked(month))) go("/collections","error","Locked-month collections cannot be edited or moved");
-  const collectedSen=moneyToSen(s(form,"collectedAmount")); if(collectedSen<=0) go(`/collections/${id}/edit`,"error","Collected amount must be above RM0"); const allocations=parseAllocations(form); if(!validateAllocations(allocations)) go(`/collections/${id}/edit`,"error","Staff allocations must be unique and total exactly 100%");
-  const category=s(form,"category") as "PRE_WEDDING"|"RENTAL"|"MAKEUP"; const [oldAllocation]=await getDb().select().from(collectionAllocations).where(eq(collectionAllocations.collectionId,id)).limit(1); const rate=category===existing.category?(oldAllocation?.commissionRateBps??rateForCategory(category,await getSettings())):rateForCategory(category,await getSettings());
-  const customerName=s(form,"customerName") || null; const bookingDate=s(form,"bookingDate") || null; const weddingPickupDate=s(form,"weddingPickupDate") || null; const settings=await getSettings();
-  await getDb().transaction(async tx=>{ await tx.delete(paymentScheduleAllocations).where(eq(paymentScheduleAllocations.collectionId,id)); await tx.update(collections).set({orderId:s(form,"orderId")||null,customerName,bookingDate,weddingPickupDate,collectionDate,category,collectedSen,source:s(form,"source")==="MANUAL_ADJUSTMENT"?"MANUAL_ADJUSTMENT":"BOOKIT",notes:s(form,"notes")||null,updatedAt:new Date()}).where(eq(collections.id,id)); await tx.delete(collectionAllocations).where(eq(collectionAllocations.collectionId,id)); await tx.delete(commissionPortions).where(eq(commissionPortions.collectionId,id)); const splits=splitAmount(collectedSen,allocations); const allocationRows=splits.map(a=>({collectionId:id,staffId:a.staffId,allocationBps:a.allocationBps,allocatedCollectedSen:a.amountSen,commissionRateBps:rate,commissionAmountSen:calculateCommission(a.amountSen,rate)})); await tx.insert(collectionAllocations).values(allocationRows); await tx.insert(commissionPortions).values(createCommissionPortionRows(id,allocationRows,bookingDate,collectionDate,weddingPickupDate,settings)); });
+  await requireAdmin();
+  const id = s(form, "id");
+  const [existing] = await getDb().select().from(collections).where(eq(collections.id, id)).limit(1);
+  if (!existing) go("/collections", "error", "Collection not found");
+
+  const bookingDate = s(form, "bookingDate") || null;
+  const weddingPickupDate = s(form, "weddingPickupDate") || null;
+
+  if (existing.bookitPaymentId) {
+    if (await isMonthLocked(monthFromMalaysiaDate(existing.collectionDate))) {
+      go("/collections", "error", "Locked-month collections cannot be edited");
+    }
+    await getDb().update(collections).set({ bookingDate, weddingPickupDate, updatedAt: new Date() }).where(eq(collections.id, id));
+    await getDb().delete(commissionPortions).where(eq(commissionPortions.collectionId, id));
+    const allocationRows = await getDb().select().from(collectionAllocations).where(eq(collectionAllocations.collectionId, id));
+    const settings = await getSettings();
+    if (allocationRows.length) {
+      await getDb().insert(commissionPortions).values(createCommissionPortionRows(id, allocationRows, bookingDate, existing.collectionDate, weddingPickupDate, settings));
+    }
+    revalidatePath("/");
+    go("/collections", "success", "Payment dates updated; Bookit commission was kept unchanged");
+  }
+
+  const collectionDate = s(form, "collectionDate");
+  const month = monthFromMalaysiaDate(collectionDate);
+  if ((await isMonthLocked(monthFromMalaysiaDate(existing.collectionDate))) || (await isMonthLocked(month))) go("/collections", "error", "Locked-month collections cannot be edited or moved");
+  const collectedSen = moneyToSen(s(form, "collectedAmount"));
+  if (collectedSen <= 0) go("/collections/" + id + "/edit", "error", "Collected amount must be above RM0");
+  const allocations = parseAllocations(form);
+  if (!validateAllocations(allocations)) go("/collections/" + id + "/edit", "error", "Staff allocations must be unique and total exactly 100%");
+  const category = s(form, "category") as "PRE_WEDDING" | "RENTAL" | "MAKEUP";
+  const [oldAllocation] = await getDb().select().from(collectionAllocations).where(eq(collectionAllocations.collectionId, id)).limit(1);
+  const rate = category === existing.category ? (oldAllocation?.commissionRateBps ?? rateForCategory(category, await getSettings())) : rateForCategory(category, await getSettings());
+  const customerName = s(form, "customerName") || null;
+  const settings = await getSettings();
+  await getDb().transaction(async (tx) => {
+    await tx.delete(paymentScheduleAllocations).where(eq(paymentScheduleAllocations.collectionId, id));
+    await tx.update(collections).set({ orderId: s(form, "orderId") || null, customerName, bookingDate, weddingPickupDate, collectionDate, category, collectedSen, source: s(form, "source") === "MANUAL_ADJUSTMENT" ? "MANUAL_ADJUSTMENT" : "BOOKIT", notes: s(form, "notes") || null, updatedAt: new Date() }).where(eq(collections.id, id));
+    await tx.delete(collectionAllocations).where(eq(collectionAllocations.collectionId, id));
+    await tx.delete(commissionPortions).where(eq(commissionPortions.collectionId, id));
+    const splits = splitAmount(collectedSen, allocations);
+    const allocationRows = splits.map((a) => ({ collectionId: id, staffId: a.staffId, allocationBps: a.allocationBps, allocatedCollectedSen: a.amountSen, commissionRateBps: rate, commissionAmountSen: calculateCommission(a.amountSen, rate) }));
+    await tx.insert(collectionAllocations).values(allocationRows);
+    await tx.insert(commissionPortions).values(createCommissionPortionRows(id, allocationRows, bookingDate, collectionDate, weddingPickupDate, settings));
+  });
   await applyCollectionToSchedules(id, customerName, collectedSen);
-  revalidatePath("/"); go("/collections","success","Collection updated and commission recalculated");
+  revalidatePath("/");
+  go("/collections", "success", "Collection updated and commission recalculated");
 }
 
 export async function createPaymentScheduleAction(form: FormData) {
