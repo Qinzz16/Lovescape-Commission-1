@@ -32,7 +32,9 @@ function splitNames(value: string) {
 }
 
 export function BookitImportForm({ people }: { people: Person[] }) {
-  const [rows, setRows] = useState<any[]>([]);
+  type RawRow = Record<string, string>;
+type NormalizedRow = { paymentId: string; paymentDate: string; customerName: string; collectionAmount: string; items: string; catalogueType: string; bookingId: string; teamMembers: string[]; commissionByStaff: { name: string; amount: string }[] };
+const [rows, setRows] = useState<RawRow[]>([]);
   const [mapping, setMapping] = useState<Record<string, string>>({});
   const [fileName, setFileName] = useState("");
   const [error, setError] = useState("");
@@ -51,7 +53,7 @@ export function BookitImportForm({ people }: { people: Person[] }) {
     return [...set].sort();
   }, [rows]);
 
-  const normalizedRows = useMemo(() => rows.map((row) => ({
+  const normalizedRows = useMemo<NormalizedRow[]>(() => rows.map((row) => ({
     paymentId: row["Payment ID"],
     paymentDate: row["Payment date"],
     customerName: row["Customer"],
@@ -98,7 +100,7 @@ export function BookitImportForm({ people }: { people: Person[] }) {
   }
 
   const mappingComplete = names.every((name) => mapping[name] && mapping[name] !== "");
-  const missingCommission = normalizedRows.some((row) => row.commissionByStaff.some((x: any) => !mapping[x.name] || mapping[x.name] === "__IGNORE__"));
+  const missingCommission = normalizedRows.some((row) => row.commissionByStaff.some((x) => !mapping[x.name] || mapping[x.name] === "__IGNORE__"));
 
   return (
     <div className="stack">
@@ -131,7 +133,7 @@ export function BookitImportForm({ people }: { people: Person[] }) {
           <h3>Import preview</h3>
           <p className="muted">Payment ID is the duplicate-protection key. Each Bookit payment becomes one Lovescape collection, so one Booking ID can safely have multiple payments.</p>
           <div className="table-wrap"><table><thead><tr><th>Payment ID</th><th>Date</th><th>Customer</th><th>Collected</th><th>Bookit commission</th><th>Booking ID</th></tr></thead>
-          <tbody>{normalizedRows.slice(0, 10).map((row) => <tr key={row.paymentId}><td>{row.paymentId}</td><td>{row.paymentDate}</td><td>{row.customerName || "—"}</td><td>RM {row.collectionAmount || "0"}</td><td>{row.commissionByStaff.map((x: any) => x.name + ": RM " + x.amount).join(", ") || "—"}</td><td>{row.bookingId || "—"}</td></tr>)}</tbody></table></div>
+          <tbody>{normalizedRows.slice(0, 10).map((row) => <tr key={row.paymentId}><td>{row.paymentId}</td><td>{row.paymentDate}</td><td>{row.customerName || "—"}</td><td>RM {row.collectionAmount || "0"}</td><td>{row.commissionByStaff.map((x) => x.name + ": RM " + x.amount).join(", ") || "—"}</td><td>{row.bookingId || "—"}</td></tr>)}</tbody></table></div>
           {rows.length > 10 ? <p className="muted">Showing first 10 rows only.</p> : null}
         </div>
 
