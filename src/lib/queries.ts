@@ -61,8 +61,8 @@ export async function monthlySummaries(month: string, allowedStaffId?: string) {
   const selectedPeople = allowedStaffId ? people.filter((p) => p.id === allowedStaffId) : people;
   return selectedPeople.map((person) => {
     const mine = rows.filter((r) => r.staffId === person.id);
-    const category = (name: "PRE_WEDDING" | "RENTAL" | "MAKEUP") => mine.filter((r) => r.collection.category === name).reduce((s, r) => s + r.allocatedCollectedSen, 0);
-    const totalCollectedSen = mine.reduce((s, r) => s + r.allocatedCollectedSen, 0);
+    const category = (name: "PRE_WEDDING" | "RENTAL" | "MAKEUP") => mine.filter((r) => r.collection.category === name).reduce((s, r) => s + (r.allocatedCollectedSen ?? 0), 0);
+    const totalCollectedSen = mine.reduce((s, r) => s + (r.allocatedCollectedSen ?? 0), 0);
     const minePortions = portions.filter((p) => p.staffId === person.id);
     const bookingPortionSen = minePortions.filter((p) => p.portion === 1).reduce((s, p) => s + p.amountSen, 0);
     const weddingPortionSen = minePortions.filter((p) => p.portion === 2).reduce((s, p) => s + p.amountSen, 0);
@@ -78,7 +78,12 @@ export async function getCollectionForEdit(id: string) {
   const rows = await listCollections({});
   const mine = rows.filter((row) => row.collection.id === id);
   if (!mine.length) return null;
-  return { ...mine[0], allocations: mine.map((row) => ({ staffId: row.staffId, staffName: row.staffName, allocationBps: row.allocationBps, commissionRateBps: row.commissionRateBps })) };
+  return {
+    ...mine[0],
+    allocations: mine
+      .filter((row): row is typeof row & { staffId: string; allocationBps: number; commissionRateBps: number } => row.staffId !== null && row.allocationBps !== null && row.commissionRateBps !== null)
+      .map((row) => ({ staffId: row.staffId, staffName: row.staffName, allocationBps: row.allocationBps, commissionRateBps: row.commissionRateBps })),
+  };
 }
 export async function paymentHistory(staffId?: string, month?: string) {
   const conditions = [];
