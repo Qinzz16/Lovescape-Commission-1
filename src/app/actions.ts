@@ -158,23 +158,23 @@ export async function importBookitPaymentsAction(form: FormData) {
       : resolvedTeam.length
         ? resolvedTeam.map((x: any) => ({ staffId: x.staffId as string, commissionAmountSen: 0 }))
         : [];
-    if (!sourceAllocations.length) {
-      errors.push("Row " + (i + 2) + " (" + paymentId + "): no mapped staff member.");
-      continue;
-    }
 
     const uniqueAllocations = Array.from(new Map(sourceAllocations.map((x: any) => [x.staffId, x])).values());
-    const totalWeight = uniqueAllocations.reduce((sum: number, x: any) => sum + (totalCommissionSen > 0 ? x.commissionAmountSen : 1), 0);
-    let assigned = 0;
-    let assignedAmount = 0;
-    const allocationRows = uniqueAllocations.map((x: any, index: number) => {
-      const weight = totalCommissionSen > 0 ? x.commissionAmountSen : 1;
-      const allocationBps = index === uniqueAllocations.length - 1 ? 10000 - assigned : Math.round(weight * 10000 / totalWeight);
-      const allocatedCollectedSen = index === uniqueAllocations.length - 1 ? amountSen - assignedAmount : Math.round(amountSen * weight / totalWeight);
-      assigned += allocationBps;
-      assignedAmount += allocatedCollectedSen;
-      return { staffId: x.staffId as string, allocationBps, allocatedCollectedSen, commissionRateBps: 0, commissionAmountSen: x.commissionAmountSen };
-    });
+    const allocationRows = uniqueAllocations.length
+      ? (() => {
+          const totalWeight = uniqueAllocations.reduce((sum: number, x: any) => sum + (totalCommissionSen > 0 ? x.commissionAmountSen : 1), 0);
+          let assigned = 0;
+          let assignedAmount = 0;
+          return uniqueAllocations.map((x: any, index: number) => {
+            const weight = totalCommissionSen > 0 ? x.commissionAmountSen : 1;
+            const allocationBps = index === uniqueAllocations.length - 1 ? 10000 - assigned : Math.round(weight * 10000 / totalWeight);
+            const allocatedCollectedSen = index === uniqueAllocations.length - 1 ? amountSen - assignedAmount : Math.round(amountSen * weight / totalWeight);
+            assigned += allocationBps;
+            assignedAmount += allocatedCollectedSen;
+            return { staffId: x.staffId as string, allocationBps, allocatedCollectedSen, commissionRateBps: 0, commissionAmountSen: x.commissionAmountSen };
+          });
+        })()
+      : [];
     if (allocationRows.some((x: any) => !peopleById.has(x.staffId))) {
       errors.push("Row " + (i + 2) + " (" + paymentId + "): mapped staff account no longer exists.");
       continue;
@@ -197,8 +197,10 @@ export async function importBookitPaymentsAction(form: FormData) {
       notes,
       createdBy: admin.id,
     }).returning();
-    await getDb().insert(collectionAllocations).values(allocationRows.map((x: any) => ({ ...x, collectionId: created.id })));
-    await getDb().insert(commissionPortions).values(createCommissionPortionRows(created.id, allocationRows, bookingDate, collectionDate, null, settings));
+    if (allocationRows.length) {
+      await getDb().insert(collectionAllocations).values(allocationRows.map((x: any) => ({ ...x, collectionId: created.id })));
+      await getDb().insert(commissionPortions).values(createCommissionPortionRows(created.id, allocationRows, bookingDate, collectionDate, null, settings));
+    }
     await applyCollectionToSchedules(created.id, customerName || null, amountSen);
     imported++;
   }
