@@ -33,7 +33,7 @@ export const sessions = pgTable("sessions", {
 }, (t) => [uniqueIndex("session_token_unique").on(t.tokenHash), index("session_staff_idx").on(t.staffId)]);
 
 export const commissionSettings = pgTable("commission_settings", {
-  id: integer("id").primaryKey().default(1), preWeddingBps: integer("pre_wedding_bps").notNull().default(300),
+  id: integer("id").primaryKey().default(1), bookingPortionBps: integer("booking_portion_bps").notNull().default(5000), weddingPortionBps: integer("wedding_portion_bps").notNull().default(5000), preWeddingBps: integer("pre_wedding_bps").notNull().default(300),
   rentalBps: integer("rental_bps").notNull().default(600), makeupBps: integer("makeup_bps").notNull().default(0),
   monthlyTargetSen: integer("monthly_target_sen").notNull().default(3_000_000), monthlyRewardSen: integer("monthly_reward_sen").notNull().default(30_000),
   updatedBy: uuid("updated_by").references(() => staff.id), updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -56,6 +56,8 @@ export const collections = pgTable("collections", {
   id: uuid("id").primaryKey().defaultRandom(),
   orderId: uuid("order_id").references(() => orders.id),
   customerName: text("customer_name"),
+  bookingDate: date("booking_date", { mode: "string" }),
+  weddingPickupDate: date("wedding_pickup_date", { mode: "string" }),
   collectionDate: date("collection_date", { mode: "string" }).notNull(), category: categoryEnum("category").notNull(),
   collectedSen: integer("collected_sen").notNull(), source: sourceEnum("source").notNull().default("BOOKIT"), notes: text("notes"),
   createdBy: uuid("created_by").notNull().references(() => staff.id), createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -88,6 +90,21 @@ export const paymentScheduleAllocations = pgTable("payment_schedule_allocations"
   allocatedSen: integer("allocated_sen").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [uniqueIndex("schedule_collection_unique").on(t.scheduleId, t.collectionId), check("schedule_allocation_positive", sql`${t.allocatedSen} > 0`), index("schedule_allocation_schedule_idx").on(t.scheduleId), index("schedule_allocation_collection_idx").on(t.collectionId)]);
+
+export const commissionPortions = pgTable("commission_portions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  collectionId: uuid("collection_id").notNull().references(() => collections.id, { onDelete: "cascade" }),
+  staffId: uuid("staff_id").notNull().references(() => staff.id),
+  portion: integer("portion").notNull(),
+  releaseMonth: text("release_month").notNull(),
+  amountSen: integer("amount_sen").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex("commission_portion_unique").on(t.collectionId, t.staffId, t.portion),
+  index("commission_portion_month_idx").on(t.releaseMonth),
+  index("commission_portion_staff_idx").on(t.staffId),
+  check("commission_portion_valid", sql`${t.portion} IN (1, 2) AND ${t.amountSen} >= 0`),
+]);
 
 export const commissionPayments = pgTable("commission_payments", {
   id: uuid("id").primaryKey().defaultRandom(), staffId: uuid("staff_id").notNull().references(() => staff.id), commissionMonth: text("commission_month").notNull(), paidSen: integer("paid_sen").notNull(),
