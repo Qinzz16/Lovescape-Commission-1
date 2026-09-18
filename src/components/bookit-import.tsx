@@ -33,7 +33,7 @@ function splitNames(value: string) {
 
 export function BookitImportForm({ people }: { people: Person[] }) {
   type RawRow = Record<string, string>;
-type NormalizedRow = { paymentId: string; paymentDate: string; customerName: string; collectionAmount: string; items: string; catalogueType: string; bookingId: string; teamMembers: string[]; commissionByStaff: { name: string; amount: string }[] };
+  type NormalizedRow = { paymentId: string; paymentDate: string; customerName: string; collectionAmount: string; items: string; catalogueType: string; bookingId: string; teamMembers: string[]; commissionByStaff: { name: string; amount: string }[] };
 const [rows, setRows] = useState<RawRow[]>([]);
   const [mapping, setMapping] = useState<Record<string, string>>({});
   const [fileName, setFileName] = useState("");
@@ -139,7 +139,8 @@ const [rows, setRows] = useState<RawRow[]>([]);
 
         <form action={importBookitPaymentsAction} className="card">
           <input type="hidden" name="rowsJson" value={JSON.stringify(normalizedRows)} />
-          <input type="hidden" name="staffMapping" value={JSON.stringify(mapping)} />\n          <label>Fallback staff for zero-commission rows without a usable Bookit staff name<select name="fallbackStaffId" defaultValue=""><option value="">Do not assign automatically</option>{people.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>\n          <p className="muted">This is only used for rows with zero Bookit commission and no mapped Team Members, such as system cashier or “-” rows.</p>
+          <input type="hidden" name="staffMapping" value={JSON.stringify(mapping)} />
+          <label>Fallback staff for zero-commission rows without a usable Bookit staff name<select name="fallbackStaffId" defaultValue=""><option value="">Do not assign automatically</option>{people.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>\n          <p className="muted">This is only used for rows with zero Bookit commission and no mapped Team Members, such as system cashier or “-” rows.</p>
           {(!mappingComplete || missingCommission) ? <div className="notice error">Please map every detected Bookit staff name before importing. Commission staff cannot be ignored.</div> : null}
           <button className="button" type="submit" disabled={!mappingComplete || missingCommission}>Import {rows.length} payments</button>
         </form>
