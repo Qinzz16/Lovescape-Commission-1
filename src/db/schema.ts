@@ -56,6 +56,7 @@ export const collections = pgTable("collections", {
   id: uuid("id").primaryKey().defaultRandom(),
   orderId: uuid("order_id").references(() => orders.id),
   customerName: text("customer_name"),
+  bookingDate: date("booking_date", { mode: "string" }),
   weddingPickupDate: date("wedding_pickup_date", { mode: "string" }),
   collectionDate: date("collection_date", { mode: "string" }).notNull(), category: categoryEnum("category").notNull(),
   collectedSen: integer("collected_sen").notNull(), source: sourceEnum("source").notNull().default("BOOKIT"), notes: text("notes"),
