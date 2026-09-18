@@ -23,6 +23,7 @@ export default async function EditCollection({ params, searchParams }: { params:
       <input type="hidden" name="id" value={id} />
       <input type="hidden" name="orderId" value={item.collection.orderId || ""} />
       <label>Customer name<input name="customerName" placeholder="Customer name" defaultValue={item.collection.customerName || ""} /></label>
+      <label>Booking date<input type="date" name="bookingDate" defaultValue={item.collection.bookingDate || item.collection.collectionDate} required /></label>
       <label>Collection date<input type="date" name="collectionDate" defaultValue={item.collection.collectionDate} required /></label>
       <label>Wedding / Pickup date<input type="date" name="weddingPickupDate" defaultValue={item.collection.weddingPickupDate || ""} /></label>
       <label>Collection category<select name="category" defaultValue={item.collection.category}><option value="PRE_WEDDING">Pre-wedding</option><option value="RENTAL">Rental</option><option value="MAKEUP">Makeup</option></select></label>
