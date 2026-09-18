@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { hash } from "bcryptjs";
 import { asc, eq } from "drizzle-orm";
 import { getDb } from "@/db";
-import { collectionAllocations, collections, commissionPayments, commissionSettings, monthlyLocks, paymentScheduleAllocations, paymentSchedules, staff } from "@/db/schema";
+import { collectionAllocations, collections, commissionPayments, commissionPortions, commissionSettings, monthlyLocks, paymentScheduleAllocations, paymentSchedules, staff } from "@/db/schema";
 import { authenticate, requireAdmin, signOut } from "@/lib/auth";
 import { calculateCommission, isSuspiciousDuplicate, moneyToSen, monthFromMalaysiaDate, rateForCategory, splitAmount, validateAllocations } from "@/lib/business";
 import { getSettings, isMonthLocked, listCollections, monthlySummaries } from "@/lib/queries";
@@ -47,6 +47,26 @@ export async function deleteStaffAction(form: FormData) {
 }
 
 function parseAllocations(form: FormData) { const staffIds=form.getAll("staffId").map(String), percentages=form.getAll("allocationPercent").map(String); return staffIds.map((staffId,index)=>({staffId,allocationBps:Math.round(Number(percentages[index])*100)})); }
+
+function createCommissionPortionRows(
+  collectionId: string,
+  allocations: Array<{ staffId: string; commissionAmountSen: number }>,
+  bookingDate: string | null | undefined,
+  collectionDate: string,
+  weddingPickupDate: string | null | undefined,
+  settings: { bookingPortionBps: number; weddingPortionBps: number },
+) {
+  const bookingMonth = monthFromMalaysiaDate(bookingDate || collectionDate);
+  const weddingMonth = monthFromMalaysiaDate(weddingPickupDate || collectionDate);
+  return allocations.flatMap((allocation) => {
+    const bookingAmount = Math.round((allocation.commissionAmountSen * settings.bookingPortionBps) / 10_000);
+    const weddingAmount = allocation.commissionAmountSen - bookingAmount;
+    return [
+      { collectionId, staffId: allocation.staffId, portion: 1, releaseMonth: bookingMonth, amountSen: bookingAmount },
+      { collectionId, staffId: allocation.staffId, portion: 2, releaseMonth: weddingMonth, amountSen: weddingAmount },
+    ];
+  });
+}
 
 async function applyCollectionToSchedules(collectionId: string, customerName: string | null, amountSen: number) {
   if (!customerName || amountSen <= 0) return;
