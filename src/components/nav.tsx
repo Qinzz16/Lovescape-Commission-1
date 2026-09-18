@@ -4,6 +4,7 @@ import { logoutAction } from "@/app/actions";
 const adminLinks = [
   ["/collections", "Collections"],
   ["/payment-due", "Payment Due"],
+  ["/bookit-import", "Bookit Import"],
   ["/monthly-commission", "Monthly Commissions"],
   ["/history", "Commission History"],
   ["/staff", "Staff"],
