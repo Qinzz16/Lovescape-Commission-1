@@ -111,7 +111,7 @@ function importedCategory(items: string, catalogueType: string): "PRE_WEDDING" |
 export async function importBookitPaymentsAction(form: FormData) {
   const admin = await requireAdmin();
   let rows: Array<any> = [];
-  let mapping: Record<string, string> = {};
+
   try {
     rows = JSON.parse(s(form, "rowsJson"));
     mapping = JSON.parse(s(form, "staffMapping"));
@@ -123,6 +123,8 @@ export async function importBookitPaymentsAction(form: FormData) {
   const fallbackStaffId = s(form, "fallbackStaffId");
   const peopleById = new Map(people.map((p) => [p.id, p]));
   const settings = await getSettings();
+  const normalizeStaffName = (value: string) => value.toLowerCase().replace(/\s+/g, " ").trim();
+  const staffByName = new Map(people.map((person) => [normalizeStaffName(person.name), person.id]));
   let imported = 0;
   let skipped = 0;
   const errors: string[] = [];
@@ -143,7 +145,7 @@ export async function importBookitPaymentsAction(form: FormData) {
     const resolvedCommission = commissionEntries
       .map((entry: any) => ({ name: String(entry.name ?? "").trim(), amountSen: parseImportedMoney(entry.amount) }))
       .filter((entry: any) => entry.name && entry.amountSen > 0)
-      .map((entry: any) => ({ ...entry, staffId: mapping[entry.name] }));
+      .map((entry: any) => ({ ...entry, staffId: staffByName.get(normalizeStaffName(entry.name)) }));
     const unmappedCommission = resolvedCommission.filter((entry: any) => !entry.staffId || entry.staffId === "__IGNORE__");
     if (unmappedCommission.length) {
       errors.push("Row " + (i + 2) + " (" + paymentId + "): commission staff not mapped: " + unmappedCommission.map((x: any) => x.name).join(", "));
@@ -151,8 +153,18 @@ export async function importBookitPaymentsAction(form: FormData) {
     }
 
     const teamNames = Array.isArray(row.teamMembers) ? row.teamMembers : [];
-    const resolvedTeam = teamNames.map((name: unknown) => ({ name: String(name).trim(), staffId: mapping[String(name).trim()] })).filter((x: any) => x.staffId && x.staffId !== "__IGNORE__");
-    const totalCommissionSen = resolvedCommission.reduce((sum: number, x: any) => sum + x.amountSen, 0);
+    const resolvedTeam = teamNames.map((name: unknown) => ({ name: String(name).trim(), staffId: staffByName.get(normalizeStaffName(String(name))) })).filter((x: any) => x.staffId);
+    const staffCommissionSen = resolvedCommission.reduce((sum: number, x: any) => sum + x.amountSen, 0);
+    const reportedCommissionSen = parseImportedMoney(row.totalCommission);
+    if (reportedCommissionSen > 0 && staffCommissionSen === 0) {
+      errors.push("Row " + (i + 2) + " (" + paymentId + "): Bookit shows commission but no staff commission was found.");
+      continue;
+    }
+    if (reportedCommissionSen > 0 && Math.abs(reportedCommissionSen - staffCommissionSen) > 1) {
+      errors.push("Row " + (i + 2) + " (" + paymentId + "): Bookit total commission does not match its staff commission columns.");
+      continue;
+    }
+    const totalCommissionSen = staffCommissionSen;
     const sourceAllocations = totalCommissionSen > 0
       ? resolvedCommission.map((x: any) => ({ staffId: x.staffId as string, commissionAmountSen: x.amountSen }))
       : resolvedTeam.length
