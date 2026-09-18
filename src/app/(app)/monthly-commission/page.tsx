@@ -1,4 +1,4 @@
-import { createPaymentAction, toggleMonthLockAction } from "@/app/actions";
+import { createPaymentAction, toggleMonthLockAction } from "@/app/monthly-actions";
 import { requireAdmin } from "@/lib/auth";
 import { malaysiaMonthFromInstant } from "@/lib/business";
 import {
