@@ -86,6 +86,126 @@ async function applyCollectionToSchedules(collectionId: string, customerName: st
   }
 }
 
+function parseImportedMoney(value: unknown) {
+  const raw = String(value ?? "").trim().replace(/,/g, "").replace(/^RM\s*/i, "");
+  if (!raw || raw === "-") return 0;
+  const n = Number(raw);
+  return Number.isFinite(n) ? Math.round(n * 100) : 0;
+}
+
+function normalizeImportedDate(value: unknown) {
+  const raw = String(value ?? "").trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10);
+  const m = raw.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (m) return m[3] + "-" + m[2].padStart(2, "0") + "-" + m[1].padStart(2, "0");
+  return "";
+}
+
+function importedCategory(items: string, catalogueType: string): "PRE_WEDDING" | "RENTAL" | "MAKEUP" {
+  const text = (items + " " + catalogueType).toLowerCase();
+  if (/makeup|mua|hair/.test(text)) return "MAKEUP";
+  if (/pre[- ]?wedding|rom|pre wedding/.test(text)) return "PRE_WEDDING";
+  return "RENTAL";
+}
+
+export async function importBookitPaymentsAction(form: FormData) {
+  const admin = await requireAdmin();
+  let rows: Array<any> = [];
+  let mapping: Record<string, string> = {};
+  try {
+    rows = JSON.parse(s(form, "rowsJson"));
+    mapping = JSON.parse(s(form, "staffMapping"));
+  } catch {
+    go("/bookit-import", "error", "The uploaded Bookit file could not be read.");
+  }
+  if (!Array.isArray(rows) || rows.length === 0 || rows.length > 5000) go("/bookit-import", "error", "Please upload a valid Bookit CSV with between 1 and 5,000 payment rows.");
+  const people = await getDb().select().from(staff);
+  const peopleById = new Map(people.map((p) => [p.id, p]));
+  const settings = await getSettings();
+  let imported = 0;
+  let skipped = 0;
+  const errors: string[] = [];
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i] ?? {};
+    const paymentId = String(row.paymentId ?? "").trim();
+    const collectionDate = normalizeImportedDate(row.paymentDate);
+    const amountSen = parseImportedMoney(row.collectionAmount);
+    if (!paymentId || !collectionDate || amountSen <= 0) {
+      errors.push("Row " + (i + 2) + ": missing Payment ID, valid Payment date, or positive Total collection.");
+      continue;
+    }
+    const [existing] = await getDb().select({ id: collections.id }).from(collections).where(eq(collections.bookitPaymentId, paymentId)).limit(1);
+    if (existing) { skipped++; continue; }
+
+    const commissionEntries = Array.isArray(row.commissionByStaff) ? row.commissionByStaff : [];
+    const resolvedCommission = commissionEntries
+      .map((entry: any) => ({ name: String(entry.name ?? "").trim(), amountSen: parseImportedMoney(entry.amount) }))
+      .filter((entry: any) => entry.name && entry.amountSen > 0)
+      .map((entry: any) => ({ ...entry, staffId: mapping[entry.name] }));
+    const unmappedCommission = resolvedCommission.filter((entry: any) => !entry.staffId || entry.staffId === "__IGNORE__");
+    if (unmappedCommission.length) {
+      errors.push("Row " + (i + 2) + " (" + paymentId + "): commission staff not mapped: " + unmappedCommission.map((x: any) => x.name).join(", "));
+      continue;
+    }
+
+    const teamNames = Array.isArray(row.teamMembers) ? row.teamMembers : [];
+    const resolvedTeam = teamNames.map((name: unknown) => ({ name: String(name).trim(), staffId: mapping[String(name).trim()] })).filter((x: any) => x.staffId && x.staffId !== "__IGNORE__");
+    const totalCommissionSen = resolvedCommission.reduce((sum: number, x: any) => sum + x.amountSen, 0);
+    const sourceAllocations = totalCommissionSen > 0
+      ? resolvedCommission.map((x: any) => ({ staffId: x.staffId as string, commissionAmountSen: x.amountSen }))
+      : resolvedTeam.length
+        ? resolvedTeam.map((x: any) => ({ staffId: x.staffId as string, commissionAmountSen: 0 }))
+        : [];
+    if (!sourceAllocations.length) {
+      errors.push("Row " + (i + 2) + " (" + paymentId + "): no mapped staff member.");
+      continue;
+    }
+
+    const uniqueAllocations = Array.from(new Map(sourceAllocations.map((x: any) => [x.staffId, x])).values());
+    const totalWeight = uniqueAllocations.reduce((sum: number, x: any) => sum + (totalCommissionSen > 0 ? x.commissionAmountSen : 1), 0);
+    let assigned = 0;
+    let assignedAmount = 0;
+    const allocationRows = uniqueAllocations.map((x: any, index: number) => {
+      const weight = totalCommissionSen > 0 ? x.commissionAmountSen : 1;
+      const allocationBps = index === uniqueAllocations.length - 1 ? 10000 - assigned : Math.round(weight * 10000 / totalWeight);
+      const allocatedCollectedSen = index === uniqueAllocations.length - 1 ? amountSen - assignedAmount : Math.round(amountSen * weight / totalWeight);
+      assigned += allocationBps;
+      assignedAmount += allocatedCollectedSen;
+      return { staffId: x.staffId as string, allocationBps, allocatedCollectedSen, commissionRateBps: 0, commissionAmountSen: x.commissionAmountSen };
+    });
+    if (allocationRows.some((x: any) => !peopleById.has(x.staffId))) {
+      errors.push("Row " + (i + 2) + " (" + paymentId + "): mapped staff account no longer exists.");
+      continue;
+    }
+
+    const customerName = String(row.customerName ?? "").trim();
+    const bookingId = String(row.bookingId ?? "").trim();
+    const notes = ["Bookit Payment ID: " + paymentId, bookingId ? "Bookit Booking ID: " + bookingId : "", String(row.items ?? "").trim()].filter(Boolean).join(" | ");
+    const bookingDate = collectionDate;
+    const [created] = await getDb().insert(collections).values({
+      bookitPaymentId: paymentId,
+      bookitBookingId: bookingId || null,
+      customerName: customerName === "-" ? null : customerName || null,
+      bookingDate,
+      weddingPickupDate: null,
+      collectionDate,
+      category: importedCategory(String(row.items ?? ""), String(row.catalogueType ?? "")),
+      collectedSen: amountSen,
+      source: "BOOKIT",
+      notes,
+      createdBy: admin.id,
+    }).returning();
+    await getDb().insert(collectionAllocations).values(allocationRows.map((x: any) => ({ ...x, collectionId: created.id })));
+    await getDb().insert(commissionPortions).values(createCommissionPortionRows(created.id, allocationRows, bookingDate, collectionDate, null, settings));
+    await applyCollectionToSchedules(created.id, customerName || null, amountSen);
+    imported++;
+  }
+  revalidatePath("/");
+  if (errors.length) go("/bookit-import", "error", "Imported " + imported + ", skipped " + skipped + ". First issues: " + errors.slice(0, 4).join(" | "));
+  go("/bookit-import", "success", "Bookit import complete: " + imported + " new payments imported, " + skipped + " duplicates skipped.");
+}
+
 export async function createCollectionAction(form: FormData) {
   const admin=await requireAdmin(); const collectionDate=s(form,"collectionDate"), month=monthFromMalaysiaDate(collectionDate); if(await isMonthLocked(month)) go("/collections","error",`${month} is locked`);
   const orderId=s(form,"orderId"), customerName=s(form,"customerName"), collectedSen=moneyToSen(s(form,"collectedAmount")); if(collectedSen<=0) go("/collections","error","Collected amount must be above RM0");
