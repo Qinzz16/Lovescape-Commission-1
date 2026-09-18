@@ -2,6 +2,8 @@ export type Category = "PRE_WEDDING" | "RENTAL" | "MAKEUP";
 export type PaymentStatus = "Unpaid" | "Partially Paid" | "Paid";
 
 export const DEFAULT_SETTINGS = {
+  bookingPortionBps: 5000,
+  weddingPortionBps: 5000,
   preWeddingBps: 300,
   rentalBps: 600,
   makeupBps: 0,
