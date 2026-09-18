@@ -63,11 +63,14 @@ export async function monthlySummaries(month: string, allowedStaffId?: string) {
     const mine = rows.filter((r) => r.staffId === person.id);
     const category = (name: "PRE_WEDDING" | "RENTAL" | "MAKEUP") => mine.filter((r) => r.collection.category === name).reduce((s, r) => s + r.allocatedCollectedSen, 0);
     const totalCollectedSen = mine.reduce((s, r) => s + r.allocatedCollectedSen, 0);
-    const commissionSen = portions.filter((p) => p.staffId === person.id).reduce((s, p) => s + p.amountSen, 0);
+    const minePortions = portions.filter((p) => p.staffId === person.id);
+    const bookingPortionSen = minePortions.filter((p) => p.portion === 1).reduce((s, p) => s + p.amountSen, 0);
+    const weddingPortionSen = minePortions.filter((p) => p.portion === 2).reduce((s, p) => s + p.amountSen, 0);
+    const commissionSen = bookingPortionSen + weddingPortionSen;
     const rewardSen = rewardFor(totalCollectedSen, settings.monthlyTargetSen, settings.monthlyRewardSen);
     const totalPayableSen = commissionSen + rewardSen;
     const paidSen = payments.filter((p) => p.staffId === person.id).reduce((s, p) => s + p.paidSen, 0);
-    return { staff: person, month, totalCollectedSen, preWeddingSen: category("PRE_WEDDING"), rentalSen: category("RENTAL"), makeupSen: category("MAKEUP"), commissionSen, rewardSen, totalPayableSen, paidSen, outstandingSen: Math.max(0, totalPayableSen - paidSen), status: paymentStatus(totalPayableSen, paidSen), targetSen: settings.monthlyTargetSen, remainingSen: Math.max(0, settings.monthlyTargetSen - totalCollectedSen), progress: settings.monthlyTargetSen ? Math.min(100, (totalCollectedSen / settings.monthlyTargetSen) * 100) : 100 };
+    return { staff: person, month, bookingPortionSen, weddingPortionSen, totalCollectedSen, preWeddingSen: category("PRE_WEDDING"), rentalSen: category("RENTAL"), makeupSen: category("MAKEUP"), commissionSen, rewardSen, totalPayableSen, paidSen, outstandingSen: Math.max(0, totalPayableSen - paidSen), status: paymentStatus(totalPayableSen, paidSen), targetSen: settings.monthlyTargetSen, remainingSen: Math.max(0, settings.monthlyTargetSen - totalCollectedSen), progress: settings.monthlyTargetSen ? Math.min(100, (totalCollectedSen / settings.monthlyTargetSen) * 100) : 100 };
   });
 }
 
