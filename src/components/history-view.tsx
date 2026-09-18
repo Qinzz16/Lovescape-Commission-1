@@ -21,21 +21,21 @@ export function HistoryView({
         </thead>
         <tbody>
           {rows.map((r, index) => (
-            <tr key={`${r.collection.id}-${r.staffId}-${index}`}>
+            <tr key={`${r.collection.id}-${r.staffId ?? "unassigned"}-${index}`}>
               <td>{r.collection.collectionDate}</td>
               <td>{r.collection.category.replace("_", " ")}</td>
               <td>
-                {r.staffName}
-                {!r.staffActive ? (
+                {r.staffName ?? <span className="muted">Unassigned</span>}
+                {r.staffId && !r.staffActive ? (
                   <>
                     <br />
                     <Status value="Inactive" />
                   </>
                 ) : null}
               </td>
-              <td><Money value={r.allocatedCollectedSen} /></td>
-              <td>{(r.commissionRateBps / 100).toFixed(2)}%</td>
-              <td><Money value={r.commissionAmountSen} /></td>
+              <td>{r.allocatedCollectedSen == null ? "—" : <Money value={r.allocatedCollectedSen} />}</td>
+              <td>{r.commissionRateBps == null ? "—" : `${(r.commissionRateBps / 100).toFixed(2)}%`}</td>
+              <td>{r.commissionAmountSen == null ? "—" : <Money value={r.commissionAmountSen} />}</td>
               <td>{r.collection.source.replace("_", " ")}</td>
             </tr>
           ))}

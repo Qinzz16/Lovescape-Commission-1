@@ -16,21 +16,24 @@ export default async function EditCollection({ params, searchParams }: { params:
     listStaff(false),
   ]);
   if (locked) redirect("/collections?error=Locked+month+collections+cannot+be+edited");
+  const isBookit = Boolean(item.collection.bookitPaymentId);
   return <>
     <PageHead title="Edit Collection" description="Changing amount or allocation recalculates commission." actions={<Status value="Unlocked" />} />
     <Notice error={q.error} />
     <form action={updateCollectionAction} className="card form-grid">
       <input type="hidden" name="id" value={id} />
       <input type="hidden" name="orderId" value={item.collection.orderId || ""} />
-      <label>Customer name<input name="customerName" placeholder="Customer name" defaultValue={item.collection.customerName || ""} /></label>
+      <label>Customer name<input name="customerName" value={item.collection.customerName || ""} readOnly /></label>
       <label>Booking date<input type="date" name="bookingDate" defaultValue={item.collection.bookingDate || item.collection.collectionDate} required /></label>
-      <label>Collection date<input type="date" name="collectionDate" defaultValue={item.collection.collectionDate} required /></label>
+      <label>Payment date<input type="date" name="collectionDate" defaultValue={item.collection.collectionDate} readOnly /></label>
       <label>Wedding / Pickup date<input type="date" name="weddingPickupDate" defaultValue={item.collection.weddingPickupDate || ""} /></label>
-      <label>Collection category<select name="category" defaultValue={item.collection.category}><option value="PRE_WEDDING">Pre-wedding</option><option value="RENTAL">Rental</option><option value="MAKEUP">Makeup</option></select></label>
-      <label>Collected amount (RM)<input name="collectedAmount" inputMode="decimal" defaultValue={(item.collection.collectedSen / 100).toFixed(2)} required /></label>
-      <label>Source<select name="source" defaultValue={item.collection.source}><option value="BOOKIT">Bookit</option><option value="MANUAL_ADJUSTMENT">Manual Adjustment</option></select></label>
-      <label className="full">Notes<textarea name="notes" defaultValue={item.collection.notes || ""} /></label>
-      <EditableAllocations people={people} initial={item.allocations} />
+      {isBookit ? <p className="muted full">Amount, staff split and commission come directly from Bookit and are not re-keyed.</p> : <>
+        <label>Collection category<select name="category" defaultValue={item.collection.category}><option value="PRE_WEDDING">Pre-wedding</option><option value="RENTAL">Rental</option><option value="MAKEUP">Makeup</option></select></label>
+        <label>Collected amount (RM)<input name="collectedAmount" inputMode="decimal" defaultValue={(item.collection.collectedSen / 100).toFixed(2)} required /></label>
+        <label>Source<select name="source" defaultValue={item.collection.source}><option value="BOOKIT">Bookit</option><option value="MANUAL_ADJUSTMENT">Manual Adjustment</option></select></label>
+        <label className="full">Notes<textarea name="notes" defaultValue={item.collection.notes || ""} /></label>
+        <EditableAllocations people={people} initial={item.allocations.length ? item.allocations : [{ staffId: "", allocationBps: 10000 }]} />
+      </>}
       <div className="actions full"><button className="button">Save changes</button><a className="button secondary" href="/collections">Cancel</a></div>
     </form>
   </>;

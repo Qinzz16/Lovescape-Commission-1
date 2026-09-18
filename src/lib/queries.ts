@@ -34,8 +34,8 @@ export async function listCollections(filters: CollectionFilters = {}, allowedSt
   if (filters.category && ["PRE_WEDDING", "RENTAL", "MAKEUP"].includes(filters.category)) conditions.push(eq(collections.category, filters.category as "PRE_WEDDING" | "RENTAL" | "MAKEUP"));
   if (filters.source && ["BOOKIT", "MANUAL_ADJUSTMENT"].includes(filters.source)) conditions.push(eq(collections.source, filters.source as "BOOKIT" | "MANUAL_ADJUSTMENT"));
   return getDb().select({ collection: collections, staffId: staff.id, staffName: staff.name, staffActive: staff.active, allocationBps: collectionAllocations.allocationBps, allocatedCollectedSen: collectionAllocations.allocatedCollectedSen, commissionRateBps: collectionAllocations.commissionRateBps, commissionAmountSen: collectionAllocations.commissionAmountSen }).from(collections)
-    .innerJoin(collectionAllocations, eq(collectionAllocations.collectionId, collections.id))
-    .innerJoin(staff, eq(collectionAllocations.staffId, staff.id))
+    .leftJoin(collectionAllocations, eq(collectionAllocations.collectionId, collections.id))
+    .leftJoin(staff, eq(collectionAllocations.staffId, staff.id))
     .where(conditions.length ? and(...conditions) : undefined)
     .orderBy(desc(collections.collectionDate), desc(collections.createdAt));
 }
@@ -61,8 +61,8 @@ export async function monthlySummaries(month: string, allowedStaffId?: string) {
   const selectedPeople = allowedStaffId ? people.filter((p) => p.id === allowedStaffId) : people;
   return selectedPeople.map((person) => {
     const mine = rows.filter((r) => r.staffId === person.id);
-    const category = (name: "PRE_WEDDING" | "RENTAL" | "MAKEUP") => mine.filter((r) => r.collection.category === name).reduce((s, r) => s + r.allocatedCollectedSen, 0);
-    const totalCollectedSen = mine.reduce((s, r) => s + r.allocatedCollectedSen, 0);
+    const category = (name: "PRE_WEDDING" | "RENTAL" | "MAKEUP") => mine.filter((r) => r.collection.category === name).reduce((s, r) => s + (r.allocatedCollectedSen ?? 0), 0);
+    const totalCollectedSen = mine.reduce((s, r) => s + (r.allocatedCollectedSen ?? 0), 0);
     const minePortions = portions.filter((p) => p.staffId === person.id);
     const bookingPortionSen = minePortions.filter((p) => p.portion === 1).reduce((s, p) => s + p.amountSen, 0);
     const weddingPortionSen = minePortions.filter((p) => p.portion === 2).reduce((s, p) => s + p.amountSen, 0);
@@ -78,7 +78,12 @@ export async function getCollectionForEdit(id: string) {
   const rows = await listCollections({});
   const mine = rows.filter((row) => row.collection.id === id);
   if (!mine.length) return null;
-  return { ...mine[0], allocations: mine.map((row) => ({ staffId: row.staffId, staffName: row.staffName, allocationBps: row.allocationBps, commissionRateBps: row.commissionRateBps })) };
+  return {
+    ...mine[0],
+    allocations: mine
+      .filter((row): row is typeof row & { staffId: string; allocationBps: number; commissionRateBps: number } => row.staffId !== null && row.allocationBps !== null && row.commissionRateBps !== null)
+      .map((row) => ({ staffId: row.staffId, staffName: row.staffName, allocationBps: row.allocationBps, commissionRateBps: row.commissionRateBps })),
+  };
 }
 export async function paymentHistory(staffId?: string, month?: string) {
   const conditions = [];
